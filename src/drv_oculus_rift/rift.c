@@ -277,6 +277,10 @@ handle_touch_controller_message(rift_hmd_t *hmd,
 		2.0 / 2048 * msg->touch.gyro[1],
 		2.0 / 2048 * msg->touch.gyro[2],
 	};
+
+	printf ("controller %d dt %f a [%f,%f,%f], g[%f,%f,%f]\n",
+	    touch->device_num, dt_s, a[0], a[1], a[2], g[0], g[1], g[2]);
+
 	vec3f mag = {{0.0f, 0.0f, 0.0f}};
 	vec3f gyro;
 	vec3f accel;
