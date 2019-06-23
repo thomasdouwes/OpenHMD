@@ -49,3 +49,6 @@ option(
 	],
 	value: 'auto',
 )
+
+option('debugging_mode', type : 'boolean', value : false,
+       description: 'Enable developer HMD debugging mode')
