@@ -316,8 +316,9 @@ static bool decode_rift_radio_message(pkt_rift_radio_message *m, const unsigned 
 	m->valid = (m->flags == 0x1c || m->flags == 0x05);
 
 	if (!m->valid) {
-		LOGV ("Invalid radio report from unknown remote device type 0x%02x flags 0x%04x",
-				m->device_type, m->flags);
+		if (m->flags != 0)
+			LOGV ("Invalid radio report from unknown remote device type 0x%02x flags 0x%04x",
+					m->device_type, m->flags);
 		return true;
 	}
 

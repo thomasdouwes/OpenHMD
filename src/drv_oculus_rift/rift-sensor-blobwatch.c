@@ -314,27 +314,27 @@ void blobwatch_process(struct blobwatch *bw, uint8_t *frame,
 		scan_again = 0;
 
 		/* Try to match each blob with the closest blob from the previous frame. */
-	for (i = 0; i < ob->num_blobs; i++) {
+		for (i = 0; i < ob->num_blobs; i++) {
 			if (closest_ob[i] != -1)
 				continue; // already has a match
 			
-		struct blob *b2 = &ob->blobs[i];
+			struct blob *b2 = &ob->blobs[i];
 			int closest_j = -1;
 			int closest_distsq = -1;
 
-		for (j = 0; j < last_ob->num_blobs; j++) {
-			struct blob *b1 = &last_ob->blobs[j];
+			for (j = 0; j < last_ob->num_blobs; j++) {
+				struct blob *b1 = &last_ob->blobs[j];
 				int x, y, dx, dy, distsq;
 
-			/* Estimate b1's next position */
-			x = b1->x + b1->vx;
-			y = b1->y + b1->vy;
+				/* Estimate b1's next position */
+				x = b1->x + b1->vx;
+				y = b1->y + b1->vy;
 
-			/* Absolute distance */
-			dx = abs(x - b2->x);
-			dy = abs(y - b2->y);
+				/* Absolute distance */
+				dx = abs(x - b2->x);
+				dy = abs(y - b2->y);
 				distsq = dx * dx + dy * dy;
-
+				
 				if (closest_distsq < 0 || distsq < closest_distsq) {
 					if (closest_last_ob[j] != -1 && closest_last_ob_distsq[j] <= distsq) {
 						// some blob already claimed this one as closest
@@ -351,7 +351,7 @@ void blobwatch_process(struct blobwatch *bw, uint8_t *frame,
 			// didn't find any matching blobs
 			if (closest_j < 0)
 				continue;
-
+			
 			if (closest_last_ob[closest_j] != -1) {
 				// we are usurping some other blob because we are closer
 				closest_ob[closest_last_ob[closest_j]] = -1;
@@ -375,14 +375,14 @@ void blobwatch_process(struct blobwatch *bw, uint8_t *frame,
 		struct blob *b2 = &ob->blobs[i];
 		struct blob *b1 = &last_ob->blobs[closest_ob[i]];
 
-			if (b1->track_index >= 0 &&
-			    ob->tracked[b1->track_index] == 0) {
-				/* Only overwrite tracks that are not already set */
-				b2->track_index = b1->track_index;
-				ob->tracked[b2->track_index] = i + 1;
-			}
-		copy_matching_blob(b2, b1);
+		if (b1->track_index >= 0 &&
+			ob->tracked[b1->track_index] == 0) {
+			/* Only overwrite tracks that are not already set */
+			b2->track_index = b1->track_index;
+			ob->tracked[b2->track_index] = i + 1;
 		}
+		copy_matching_blob(b2, b1);
+	}
 	// printf("done matching\n");
 
 	/*
@@ -420,7 +420,7 @@ void blobwatch_process(struct blobwatch *bw, uint8_t *frame,
 
 	if (bw->flicker_enable) {
 		/* Identify blobs by their blinking pattern */
-		rift_sensor_flicker_process(ob->blobs, ob->num_blobs, led_pattern_phase,
+		ob->num_led_blobs = rift_sensor_flicker_process(ob->blobs, ob->num_blobs, led_pattern_phase,
 				leds, num_leds);
 	}
 

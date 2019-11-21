@@ -20,7 +20,7 @@ cdata.set_quoted('GST_PACKAGE_ORIGIN', 'https://www.openhmd.net')
 configure_file(output : 'config.h', configuration : cdata)
 
 dep_libm = meson.get_compiler('c').find_library('m', required: false)
-dep_opencv = dependency('opencv')
+dep_opencv = dependency('opencv3')
 
 gst_dep = dependency('gstreamer-1.0',
     fallback : ['gstreamer', 'gst_dep'])

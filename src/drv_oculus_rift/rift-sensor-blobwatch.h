@@ -38,6 +38,7 @@ struct blob {
  */
 struct blobservation {
 	int num_blobs;
+	int num_led_blobs; // num blobs led_id != -1
 	struct blob blobs[MAX_BLOBS_PER_FRAME];
 	int tracked_blobs;
 	uint8_t tracked[MAX_BLOBS_PER_FRAME];

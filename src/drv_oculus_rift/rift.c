@@ -836,6 +836,8 @@ static void init_touch_device(rift_touch_controller_t *touch, int id, int device
 
 static rift_hmd_t *open_hmd(ohmd_driver* driver, ohmd_device_desc* desc)
 {
+	printf("open_hmd\n");
+
 	rift_hmd_t* priv = ohmd_alloc(driver->ctx, sizeof(rift_hmd_t));
 	rift_device_priv *hmd_dev;
 	if(!priv)
@@ -864,6 +866,8 @@ static rift_hmd_t *open_hmd(ohmd_driver* driver, ohmd_device_desc* desc)
 		ohmd_set_error(driver->ctx, "failed to set non-blocking on device");
 		goto cleanup;
 	}
+
+	printf("desc->revision: %d\n", desc->revision);
 
 	/* For the CV1, try and open the radio HID device */
 	if (desc->revision == REV_CV1) {
@@ -1154,6 +1158,8 @@ static void get_device_list(ohmd_driver* driver, ohmd_device_list* list)
 		{ "GearVR (Gen1)", SAMSUNG_ELECTRONICS_CO_ID, 0xa500,	 0, REV_GEARVR_GEN1 },
 	};
 
+	printf("get_device_list\n");
+
 	for(int i = 0; i < RIFT_ID_COUNT; i++){
 		struct hid_device_info* devs = hid_enumerate(rd[i].company, rd[i].id);
 		struct hid_device_info* cur_dev = devs;
@@ -1164,8 +1170,10 @@ static void get_device_list(ohmd_driver* driver, ohmd_device_list* list)
 		while (cur_dev) {
 			// We need to check the manufacturer because other companies (eg: VR-Tek)
 			// are reusing the Oculus DK1 USB ID for their own HMDs
+			printf("dev: %s\n", cur_dev->manufacturer_string);
 			if((wcscmp(cur_dev->manufacturer_string, L"Oculus VR, Inc.") == 0) &&
 			   (rd[i].iface == -1 || cur_dev->interface_number == rd[i].iface)) {
+					 printf("yay\n");
 				int id = 0;
 				ohmd_device_desc* desc = &list->devices[list->num_devices++];
 

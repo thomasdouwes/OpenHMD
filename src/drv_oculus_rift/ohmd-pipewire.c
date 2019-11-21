@@ -326,7 +326,7 @@ void ohmd_pw_stream_push_common (ohmd_pw_base_stream *base, int64_t pts, const u
 			goto done;
 
 	if ((h = spa_buffer_find_meta(b, types->meta.Header))) {
-			h->pts = pts;
+			h->pts = -1; //pts;
 			h->flags = 0;
 			h->seq = base->seq++;
 			h->dts_offset = 0;

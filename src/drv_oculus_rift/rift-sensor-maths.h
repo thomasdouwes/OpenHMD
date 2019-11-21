@@ -74,7 +74,7 @@ static inline void dquat_normalize(dquat *q)
 	q->z *= inv_norm;
 }
 
-static inline void dquat_mult(dquat *r, dquat *p, const dquat *q)
+static inline void dquat_mult(dquat *r, const dquat *p, const dquat *q)
 {
 	r->w = p->w * q->w - p->x * q->x - p->y * q->y - p->z * q->z;
 	r->x = p->w * q->x + p->x * q->w + p->y * q->z - p->z * q->y;

@@ -1,0 +1,19 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/usr/include/hidapi",
+                "/opt/opencv3/include/opencv"
+            ],
+            "defines": [],
+            "compilerPath": "/bin/clang",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "clang-x64",
+            "compileCommands": "/media/Biggie-ext4/matt/code/OpenHMD/build/compile_commands.json"
+        }
+    ],
+    "version": 4
+}

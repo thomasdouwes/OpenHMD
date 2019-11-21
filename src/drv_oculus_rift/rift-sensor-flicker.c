@@ -56,14 +56,20 @@ static int pattern_find_id(rift_led *leds, int num_patterns,
 /*
  * Records blob blinking patterns and compares against the blinking patterns
  * stored in the Rift DK2 to determine the corresponding LED IDs.
+ * Returns number of blobs with an led_id
  */
-void rift_sensor_flicker_process(struct blob *blobs, int num_blobs,
+int rift_sensor_flicker_process(struct blob *blobs, int num_blobs,
 		     uint8_t led_pattern_phase, rift_led *leds, uint8_t num_leds)
 {
 	struct blob *b;
 	int success = 0;
 	uint8_t phase = led_pattern_phase % 10;
 	int thresh = 0;
+	int led_blobs = 0;
+
+	int new_blobs = 0;
+	int min_area = 1000000;
+	int max_area = 0;
 
 	for (b = blobs; b < blobs + num_blobs; b++) {
 		uint16_t pattern = 0;
@@ -83,6 +89,12 @@ void rift_sensor_flicker_process(struct blob *blobs, int num_blobs,
 			continue;
 		}
 
+		if (b->age == 0)
+			new_blobs++;
+		if (b->area > max_area)
+			max_area = b->area;
+		if (b->area < min_area)
+			min_area = b->area;
 
 		
 		b->pattern_bits[phase] = b->area;
@@ -107,14 +119,15 @@ void rift_sensor_flicker_process(struct blob *blobs, int num_blobs,
 			if (b->pattern_bits[i] < min_bit)
 				min_bit = b->pattern_bits[i];
 		}
+
+		if (min_bit < 5)
+			continue;
+		
 		thresh = min_bit + (max_bit - min_bit)/2;
 		for (int i = 0; i < 10; i++) {
 			if (b->pattern_bits[i] > thresh)
 				pattern |= (1 << i);
 		}
-
-		if (min_bit < 5)
-			continue;
 
 #if 0
 		printf ("blob %d age %d pattern %x phase %d bits %d %d %d %d %d %d %d %d %d %d\n",
@@ -141,8 +154,27 @@ void rift_sensor_flicker_process(struct blob *blobs, int num_blobs,
 					     &b->led_id);
 		  }
 		  if (b->led_id != led_id) {
-		  	printf("Changing led %d from %d to %d pattern 0x%x at age %d\n", b->track_index, led_id, b->led_id, pattern, b->age);
+				if (led_id == -1) {
+		  		printf("Found led %d id %d pattern 0x%x at age %d\n", b->track_index, b->led_id, pattern, b->age);
+				} else {
+		  		printf("Changing led %d from %d to %d pattern 0x%x at age %d\n", b->track_index, led_id, b->led_id, pattern, b->age);
+				}
+				printf("  thresh: %d  gap: %d   ", thresh, max_bit - min_bit);
+				for (int i = 0; i < 10; i++) {
+					printf("%d, ", b->pattern_bits[i]);
+				}
+				printf("\n");
 		  }
 		}
 	}
+
+	if (new_blobs > 0)
+		printf("New blobs: %d  min_area: %d  max_area: %d\n", new_blobs, min_area, max_area);
+	
+
+	for (b = blobs; b < blobs + num_blobs; b++) {
+		if (b->led_id != -1)
+			led_blobs++;
+	}
+	return led_blobs;
 }

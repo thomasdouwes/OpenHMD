@@ -33,7 +33,7 @@ if not dep_hidapi.found()
 endif
 dep_threads = dependency('threads')
 dep_libusb = dependency('libusb-1.0')
-dep_opencv = dependency('opencv')
+dep_opencv = dependency('opencv3')
 
 deps = [
 	dep_libm,
@@ -102,7 +102,10 @@ if _drivers.contains('rift')
 		'src/drv_oculus_rift/rift-sensor-esp770u.c',
 		'src/drv_oculus_rift/rift-sensor-flicker.c',
 		'src/drv_oculus_rift/rift-sensor-tracker.c',
-		'src/drv_oculus_rift/rift-sensor-uvc.c'
+		'src/drv_oculus_rift/rift-sensor-uvc.c',
+		'src/drv_oculus_rift/softposit.cpp',
+		# 'src/drv_oculus_rift/debug_draw.c',
+		'src/ext_deps/nxjson.c'
 	]
 	c_args += '-DDRIVER_OCULUS_RIFT'
 	c_args += '-DHAVE_OPENCV=1'

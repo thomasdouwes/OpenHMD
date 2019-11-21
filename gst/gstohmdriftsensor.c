@@ -388,9 +388,9 @@ static gboolean tracker_process_blobs(GstOhmdRiftSensor *filter, GstClockTime ts
     filter->pose_orient = pose_orient;
 #endif
 
-    g_print ("sensor %u Got PnP pose quat %f %f %f %f  pos %f %f %f from %d LEDs %d blobs\n", 0,
-            filter->pose_orient.x, filter->pose_orient.y, filter->pose_orient.z, filter->pose_orient.w,
-            filter->pose_pos.x, filter->pose_pos.y, filter->pose_pos.z, num_leds, bwobs->num_blobs);
+    // g_print ("sensor %u Got PnP pose quat %f %f %f %f  pos %f %f %f from %d LEDs %d blobs\n", 0,
+    //         filter->pose_orient.x, filter->pose_orient.y, filter->pose_orient.z, filter->pose_orient.w,
+    //         filter->pose_pos.x, filter->pose_pos.y, filter->pose_pos.z, num_leds, bwobs->num_blobs);
     ret = TRUE;
   }
 
@@ -551,11 +551,12 @@ gst_ohmd_rift_sensor_transform_frame (GstVideoFilter *base,
           }
         }
       }
+      printf("  vis: %d  matched: %d  blobs: %d\r", visible_leds, matched_visible_blobs, filter->bwobs->num_led_blobs);
       gboolean good_pose_match = FALSE;
-      if (visible_leds > 4 && matched_visible_blobs > 0) {
-        if (visible_leds < 2 * matched_visible_blobs) {
+      if (visible_leds > 4 && matched_visible_blobs > 4) {
+        if (filter->bwobs->num_led_blobs < 2 * matched_visible_blobs) {
           good_pose_match = TRUE;
-          g_print ("Found good pose match - %u LEDs matched %u visible ones\n",
+          g_print ("  Found good pose match - %u LEDs matched %u visible ones\r",
               matched_visible_blobs, visible_leds);
         }
       }
@@ -576,7 +577,7 @@ gst_ohmd_rift_sensor_transform_frame (GstVideoFilter *base,
             struct blob *b = blobwatch_find_blob_at(filter->bw, x, y);
             if (b != NULL && facing.z < -0.5 && b->led_id != i) {
               /* Found a blob! */
-              g_print ("Marking LED %d at %d,%d\n", i, x, y);
+              // g_print ("Marking LED %d at %d,%d\n", i, x, y);
               b->led_id = i;
             }
           }

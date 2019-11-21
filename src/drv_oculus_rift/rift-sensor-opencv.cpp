@@ -5,6 +5,7 @@
  */
 #include <opencv2/calib3d/calib3d.hpp>
 #include <iostream>
+#include "softposit.h"
 
 using namespace std;
 
@@ -40,9 +41,9 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 	uint64_t taken = 0;
 	int flags = CV_ITERATIVE;
 	cv::Mat inliers;
-	int iterationsCount = 50;
-	float reprojectionError = 1.0;
-	float confidence = 0.95;
+	int iterationsCount = 100;
+	float reprojectionError = 0.1;
+	float confidence = 0.999;
 	cv::Mat fishK = cv::Mat(3, 3, CV_64FC1, camera_matrix->m);
 	cv::Mat fishDistCoeffs = cv::Mat(4, 1, CV_64FC1, dist_coeffs);
 	cv::Mat dummyK = cv::Mat::eye(3, 3, CV_64FC1);
@@ -55,7 +56,7 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 		tvec.at<double>(i) = trans->arr[i];
 
 	quatf_to_3x3 (R, rot);
-	cv::Rodrigues(R, rvec);
+	// cv::Rodrigues(R, rvec);
 
 	//cout << "R = " << R << ", rvec = " << rvec << endl;
 
@@ -73,7 +74,8 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 	if (num_leds < 4)
 		return false;
 
-	std::vector<cv::Point3f> list_points3d(num_leds);
+	std::vector<cv::Vec3d> list_points3d(num_leds);
+	std::vector<cv::Vec3d> list_points3d_all(5 /*num_led_pos*/);
 	std::vector<cv::Point2f> list_points2d(num_leds);
 	std::vector<cv::Point2f> list_points2d_undistorted(num_leds);
 
@@ -84,9 +86,9 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 		if (taken & (1ULL << blobs[i].led_id))
 			continue;
 		taken |= (1ULL << blobs[i].led_id);
-		list_points3d[j].x = leds[blobs[i].led_id].pos.x;
-		list_points3d[j].y = leds[blobs[i].led_id].pos.y;
-		list_points3d[j].z = leds[blobs[i].led_id].pos.z;
+		list_points3d[j][0] = leds[blobs[i].led_id].pos.x;
+		list_points3d[j][1] = leds[blobs[i].led_id].pos.y;
+		list_points3d[j][2] = leds[blobs[i].led_id].pos.z;
 		list_points2d[j].x = blobs[i].x;
 		list_points2d[j].y = blobs[i].y;
 		j++;
@@ -101,18 +103,47 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 	num_leds = j;
 	if (num_leds < 4)
 		return false;
+		num_leds = 4;
 	list_points3d.resize(num_leds);
 	list_points2d.resize(num_leds);
 	list_points2d_undistorted.resize(num_leds);
+
+	for (j = 0; j < 5/*num_led_pos*/; j++) {
+		list_points3d_all[j][0] = leds[j].pos.x/1000000.0;
+		list_points3d_all[j][1] = leds[j].pos.y/1000000.0;
+		list_points3d_all[j][2] = leds[j].pos.z/1000000.0;
+	}
 
 	// we have distortion params for the openCV fisheye model
 	// so we undistort the image points manually before passing them to the PnpRansac solver
 	// and we give the solver identity camera + null distortion matrices
 	cv::fisheye::undistortPoints(list_points2d, list_points2d_undistorted, fishK, fishDistCoeffs);
 
+	// printf("Setting up softposit...\n");
+
 	cv::solvePnPRansac(list_points3d, list_points2d_undistorted, dummyK, dummyD, rvec, tvec,
 			   use_extrinsic_guess, iterationsCount, reprojectionError,
 			   confidence, inliers, flags);
+				 
+	std::vector<Object*> objects(1);
+	objects[0] = softposit_new_object(list_points3d_all);
+
+	softposit(objects, list_points2d_undistorted);
+
+	printf("PnPRansac rot: %f %f %f\n", rvec.at<double>(0), rvec.at<double>(1), rvec.at<double>(2));
+	printf("PnPRansac trans: %f %f %f\n", tvec.at<double>(0), tvec.at<double>(1), tvec.at<double>(2));
+
+	// cv::Rodrigues(objects[0]->rotation, rvec);
+	printf("softposit rot: %f %f %f\n", objects[0]->rotation.at<double>(0, 0), objects[0]->rotation.at<double>(0, 1), objects[0]->rotation.at<double>(0, 2));
+	printf("               %f %f %f\n", objects[0]->rotation.at<double>(1, 0), objects[0]->rotation.at<double>(1, 1), objects[0]->rotation.at<double>(1, 2));
+	printf("               %f %f %f\n", objects[0]->rotation.at<double>(2, 0), objects[0]->rotation.at<double>(2, 1), objects[0]->rotation.at<double>(2, 2));
+
+	tvec = objects[0]->translation;
+	printf("softposit trans: %f %f %f %f\n", objects[0]->translation[0], objects[0]->translation[1], objects[0]->translation[2], objects[0]->translation[3]);
+
+	softposit_free_object(objects[0]);
+
+	abort();
 
 	vec3f v;
 	double angle = sqrt(rvec.dot(rvec));
@@ -126,9 +157,11 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 	for (i = 0; i < 3; i++)
 		trans->arr[i] = tvec.at<double>(i);
 
-	LOGV ("Got PnP pose quat %f %f %f %f  pos %f %f %f\n",
-	     rot->x, rot->y, rot->z, rot->w,
-	     trans->x, trans->y, trans->z);
+
+	// LOGV ("Got PnP pose quat %f %f %f %f  pos %f %f %f  leds %u",
+	//      rot->x, rot->y, rot->z, rot->w,
+	//      trans->x, trans->y, trans->z,
+	// 	 num_leds);
 	return true;
 }
 

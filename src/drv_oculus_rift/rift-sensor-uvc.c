@@ -123,9 +123,9 @@ void process_payload(struct rift_sensor_uvc_stream *stream, unsigned char *paylo
 	if (have_pts) {
 		pts = __le32_to_cpu(h->dwPresentationTime);
 		if (stream->payload_size != 0 && pts != stream->pts) {
-			printf("UVC PTS changed in-frame at %u bytes. Lost %u ms\n",
-			    stream->payload_size,
-			    (pts - stream->pts * 1000) / RIFT_SENSOR_CLOCK_FREQ);
+			// printf("UVC PTS changed in-frame at %u bytes. Lost %u ms\n",
+			//     stream->payload_size,
+			//     (pts - stream->pts * 1000) / RIFT_SENSOR_CLOCK_FREQ);
 			stream->pts = pts;
 		}
 	}
@@ -138,9 +138,9 @@ void process_payload(struct rift_sensor_uvc_stream *stream, unsigned char *paylo
 		uint64_t time;
 
 		if (stream->payload_size > 0) {
-			printf("UVC Dropping short frame: %u < %u (%d lost)\n",
-			    stream->payload_size, stream->frame_size,
-			    stream->frame_size - stream->payload_size);
+			// printf("UVC Dropping short frame: %u < %u (%d lost)\n",
+			//     stream->payload_size, stream->frame_size,
+			//     stream->frame_size - stream->payload_size);
 		}
 
 		/* Start of new frame */
@@ -171,8 +171,8 @@ void process_payload(struct rift_sensor_uvc_stream *stream, unsigned char *paylo
 	}
 
 	if (stream->payload_size + payload_len > stream->frame_size) {
-		printf("UVC frame buffer overflow: %u + %u > %u\n",
-		       stream->payload_size, payload_len, stream->frame_size);
+		// printf("UVC frame buffer overflow: %u + %u > %u\n",
+		//        stream->payload_size, payload_len, stream->frame_size);
 		return;
 	}
 

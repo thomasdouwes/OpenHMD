@@ -5,7 +5,6 @@
  * SPDX-License-Identifier: BSL-1.0
  */
 
-#include <libusb.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -13,79 +12,15 @@
 
 #include "rift-sensor-tracker.h"
 
-#include "rift-sensor-blobwatch.h"
 #include "rift-sensor-ar0134.h"
 #include "rift-sensor-esp770u.h"
-#include "rift-sensor-uvc.h"
 
-#include "rift-sensor-maths.h"
 #include "rift-sensor-opencv.h"
+#include "debug_draw.h"
 
-#include "kalman.h"
-#include "ohmd-pipewire.h"
 
 #define ASSERT_MSG(_v, label, ...) if(!(_v)){ fprintf(stderr, __VA_ARGS__); goto label; }
 #define min(a,b) ((a) < (b) ? (a) : (b))
-
-#define MAX_SENSORS 4
-#define MAX_DEVICES 3
-
-#define MAX_OBJECT_LEDS 64
-
-typedef struct rift_sensor_ctx_s rift_sensor_ctx;
-typedef struct rift_tracked_device_s rift_tracked_device;
-
-struct rift_tracked_device_s
-{
-	fusion *fusion;
-};
-
-struct rift_sensor_ctx_s
-{
-  int id;
-  char serial_no[32];
-  rift_tracker_ctx *tracker;
-
-  libusb_device_handle *usb_devh;
-  int stream_started;
-  struct rift_sensor_uvc_stream stream;
-  uint64_t frame_sof_ts;
-  uint64_t led_pattern_sof_ts;
-  uint8_t led_pattern_phase;
-  struct blobwatch* bw;
-	struct blobservation* bwobs;
-
-  dmat3 camera_matrix;
-  double dist_coeffs[4];
-
-  kalman_pose *pose_filter;
-  vec3f pose_pos;
-  quatf pose_orient;
-
-	vec3f led_out_points[MAX_OBJECT_LEDS];
-
-  ohmd_pw_video_stream *debug_vid;
-  ohmd_pw_debug_stream *debug_metadata;
-};
-
-struct rift_tracker_ctx_s
-{
-	ohmd_context* ohmd_ctx;
-  libusb_context *usb_ctx;
-	ohmd_mutex *tracker_lock;
-
-	ohmd_thread* usb_thread;
-	int usb_completed;
-
-  rift_leds *leds;
-  uint8_t led_pattern_phase;
-  uint64_t led_pattern_phase_ts;
-
-  rift_sensor_ctx *sensors[MAX_SENSORS];
-  uint8_t n_sensors;
-
-  rift_tracked_device devices[MAX_DEVICES];
-};
 
 static uint8_t rift_sensor_tracker_get_led_pattern_phase (rift_tracker_ctx *ctx, uint64_t *ts);
 
@@ -217,9 +152,9 @@ static void new_frame_cb(struct rift_sensor_uvc_stream *stream)
 	int width = stream->width;
 	int height = stream->height;
 
-	if(stream->payload_size != width * height) {
-		LOGW("bad frame: %d\n", (int)stream->payload_size);
-	}
+	// if(stream->payload_size != width * height) {
+	// 	LOGW("bad frame: %d\n", (int)stream->payload_size);
+	// }
 
 	rift_sensor_ctx *sensor_ctx = stream->user_data;
 	assert (sensor_ctx);
@@ -252,7 +187,7 @@ static void new_frame_cb(struct rift_sensor_uvc_stream *stream)
 		led_pattern_phase = chosen_phase;
 	}
 
-	LOGV ("Sensor %d Handling frame phase %d\n", sensor_ctx->id, led_pattern_phase);
+	// LOGV ("Sensor %d Handling frame phase %d\n", sensor_ctx->id, led_pattern_phase);
 	blobwatch_process(sensor_ctx->bw, stream->frame, width, height,
 		led_pattern_phase, sensor_ctx->tracker->leds->points,
 		sensor_ctx->tracker->leds->num_points, &sensor_ctx->bwobs);
@@ -292,7 +227,7 @@ static void new_frame_cb(struct rift_sensor_uvc_stream *stream)
       }
 
       if (visible_leds > 4 && matched_visible_blobs > 0) {
-        if (visible_leds < 2 * matched_visible_blobs) {
+        if (sensor_ctx->bwobs->num_led_blobs < 2 * matched_visible_blobs) {
           good_pose_match = true;
           printf ("Found good pose match - %u LEDs matched %u visible ones\n",
               matched_visible_blobs, visible_leds);
@@ -311,26 +246,26 @@ static void new_frame_cb(struct rift_sensor_uvc_stream *stream)
       }
 
       if (good_pose_match) {
-      for (i = 0; i < leds->num_points; i++) {
-        vec3f *p = sensor_ctx->led_out_points + i;
-        vec3f facing;
-        int x = round(p->x);
-        int y = round(p->y);
+				for (i = 0; i < leds->num_points; i++) {
+					vec3f *p = sensor_ctx->led_out_points + i;
+					vec3f facing;
+					int x = round(p->x);
+					int y = round(p->y);
 
-        oquatf_get_rotated(&sensor_ctx->pose_orient, &leds->points[i].dir, &facing);
+					oquatf_get_rotated(&sensor_ctx->pose_orient, &leds->points[i].dir, &facing);
 
-        if (facing.z < 0) {
-          /* Camera facing */
-          /* Back project LED ids into blobs if we find them */
-          struct blob *b = blobwatch_find_blob_at(sensor_ctx->bw, x, y);
-          if (b != NULL && b->led_id != i) {
-            /* Found a blob! */
-            LOGD ("Marking LED %d at %d,%d (was %d)\n", i, x, y, b->led_id);
-            b->led_id = i;
-          }
+					if (facing.z < 0) {
+					/* Camera facing */
+					/* Back project LED ids into blobs if we find them */
+					struct blob *b = blobwatch_find_blob_at(sensor_ctx->bw, x, y);
+					if (b != NULL && b->led_id != i) {
+						/* Found a blob! */
+						LOGD ("Marking LED %d at %d,%d (was %d)\n", i, x, y, b->led_id);
+						b->led_id = i;
+					}
+					}
 				}
-			}
-		}
+      }
 #if 0
 			printf("Sensor %d phase %d Blobs: %d\n", sensor_ctx->id, led_pattern_phase, sensor_ctx->bwobs->num_blobs);
 
@@ -382,6 +317,20 @@ rift_sensor_new (ohmd_context* ohmd_ctx, int id, const char *serial_no, libusb_d
   int ret;
 
   sensor_ctx = ohmd_alloc(ohmd_ctx, sizeof (rift_sensor_ctx));
+
+  /* Camera matrix taken from one of my sensors:
+   * f = [ 715.185 715.185 ], c = [ 658.333 469.870 ]
+   * k = [  0.069530 -0.019189  0.001986  0.000214 ]
+   */
+   double * const A = sensor_ctx->camera_matrix.m;
+   double * const k = sensor_ctx->dist_coeffs;
+
+   A[0] = 715.185; A[2] = 658.333;
+   A[4] = 715.185; A[5] = 469.870;
+   A[8] = 1.0;
+
+   k[0] = 0.069530; k[1] = -0.019189;
+   k[2] = 0.001986; k[3] = 0.000214;
 
   sensor_ctx->id = id;
   strcpy ((char *) sensor_ctx->serial_no, (char *) serial_no);

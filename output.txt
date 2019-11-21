@@ -1,0 +1,387 @@
+[II] HMD IMU calibration  gyro_offset [ 0.000300, 0.001600, 0.000700 ]  accel_offset [ 0.134000, -0.289100, -0.167000 ]
+[II]   gyro_calib = 
+[II]   [    1.001,    0.018,    0.012 ]
+[II]   [    0.002,    0.998,   -0.002 ]
+[II]   [    0.003,    0.012,    0.998 ]
+[II]   accel_calib = 
+[II]   [    1.018,   -0.002,   -0.014 ]
+[II]   [   -0.003,    1.016,    0.019 ]
+[II]   [    0.003,   -0.004,    0.989 ]
+[VV] LED index 8 pos x/y/x -20134/18154/74056
+
+[VV] LED index 9 pos x/y/x 54622/34265/68937
+
+[VV] LED index 10 pos x/y/x 20263/18178/74162
+
+[VV] LED index 11 pos x/y/x -79039/-12212/28231
+
+[VV] LED index 12 pos x/y/x -77552/-12192/-8267
+
+[VV] LED index 13 pos x/y/x -70753/-31449/10335
+
+[VV] LED index 14 pos x/y/x -58842/-40811/36299
+
+[VV] LED index 15 pos x/y/x 58971/-40839/36300
+
+[VV] LED index 16 pos x/y/x 28410/-43608/61449
+
+[VV] LED index 17 pos x/y/x -80491/-24821/53426
+
+[VV] LED index 18 pos x/y/x -27805/-43501/61546
+
+[VV] LED index 19 pos x/y/x 70860/-31459/10270
+
+[VV] LED index 20 pos x/y/x 77793/-12100/-8406
+
+[VV] LED index 21 pos x/y/x 79193/-12109/28388
+
+[VV] LED index 22 pos x/y/x 80545/-24740/53463
+
+[VV] LED index 23 pos x/y/x -29035/43600/57635
+
+[VV] LED index 24 pos x/y/x -78208/29387/53097
+
+[VV] LED index 25 pos x/y/x 72246/30713/149
+
+[VV] LED index 26 pos x/y/x 66819/37673/29726
+
+[VV] LED index 27 pos x/y/x 78039/29271/52974
+
+[VV] LED index 28 pos x/y/x 28870/43476/57414
+
+[VV] LED index 29 pos x/y/x -67056/37691/29976
+
+[VV] LED index 30 pos x/y/x -72214/30481/328
+
+[VV] LED index 31 pos x/y/x -41308/43391/23572
+
+[VV] LED index 32 pos x/y/x -114/43867/33431
+
+[VV] LED index 33 pos x/y/x 41024/43188/23313
+
+[VV] LED index 34 pos x/y/x -11696/25806/-164146
+
+[VV] LED index 35 pos x/y/x -24016/7052/-160954
+
+[VV] LED index 36 pos x/y/x -32898/-11805/-153813
+
+[VV] LED index 37 pos x/y/x -40291/-31381/-139963
+
+[VV] LED index 38 pos x/y/x -15050/-42141/-143041
+
+[VV] LED index 39 pos x/y/x 14955/-42260/-142818
+
+[VV] LED index 40 pos x/y/x 40052/-31248/-139999
+
+[VV] LED index 41 pos x/y/x 32807/-11606/-154013
+
+[VV] LED index 42 pos x/y/x 24133/7293/-161127
+
+[VV] LED index 43 pos x/y/x 12004/26290/-164121
+
+[VV] IMU index 44 pos x/y/x -16570/34500/33074
+
+[VV] LED index 0 pos x/y/x 62654/-32369/67489
+
+[VV] LED index 1 pos x/y/x 77223/461/65695
+
+[VV] LED index 2 pos x/y/x 28810/-18973/73225
+
+[VV] LED index 3 pos x/y/x -84/-32855/72204
+
+[VV] LED index 4 pos x/y/x -29034/-18976/73084
+
+[VV] LED index 5 pos x/y/x -63028/-32148/67397
+
+[VV] LED index 6 pos x/y/x -77294/854/65431
+
+[VV] LED index 7 pos x/y/x -54350/34509/68657
+
+[VV] LED index 9 pattern 0x0005777f
+
+[VV] LED index 10 pattern 0x00057d5d
+
+[VV] LED index 11 pattern 0x00057d77
+
+[VV] LED index 12 pattern 0x00057fd7
+
+[VV] LED index 13 pattern 0x00057ffd
+
+[VV] LED index 14 pattern 0x0005d755
+
+[VV] LED index 15 pattern 0x0005dd75
+
+[VV] LED index 16 pattern 0x00075775
+
+[VV] LED index 17 pattern 0x00077757
+
+[VV] LED index 18 pattern 0x0007d55f
+
+[VV] LED index 19 pattern 0x0007d5f5
+
+[VV] LED index 20 pattern 0x0007d7d7
+
+[VV] LED index 21 pattern 0x0007dddd
+
+[VV] LED index 22 pattern 0x0007df77
+
+[VV] LED index 23 pattern 0x0007f555
+
+[VV] LED index 24 pattern 0x0007f5ff
+
+[VV] LED index 25 pattern 0x0007f77d
+
+[VV] LED index 26 pattern 0x0007fdd7
+
+[VV] LED index 27 pattern 0x0007ff5f
+
+[VV] LED index 28 pattern 0x0007fff5
+
+[VV] LED index 29 pattern 0x000d5f55
+
+[VV] LED index 30 pattern 0x000d775d
+
+[VV] LED index 31 pattern 0x000dd55d
+
+[VV] LED index 32 pattern 0x000dd577
+
+[VV] LED index 33 pattern 0x000dd7df
+
+[VV] LED index 34 pattern 0x000dd7f5
+
+[VV] LED index 35 pattern 0x000dddfd
+
+[VV] LED index 36 pattern 0x000ddf7f
+
+[VV] LED index 37 pattern 0x000df5d5
+
+[VV] LED index 38 pattern 0x000df757
+
+[VV] LED index 39 pattern 0x000dfd5f
+
+[VV] LED index 40 pattern 0x000dfdf7
+
+[VV] LED index 41 pattern 0x000dffdd
+
+[VV] LED index 42 pattern 0x000f557f
+
+[VV] LED index 43 pattern 0x000f55d7
+
+[VV] LED index 0 pattern 0x00055557
+
+[VV] LED index 1 pattern 0x0005557d
+
+[VV] LED index 2 pattern 0x000557dd
+
+[VV] LED index 3 pattern 0x000557f7
+
+[VV] LED index 4 pattern 0x00055dd5
+
+[VV] LED index 5 pattern 0x00055dff
+
+[VV] LED index 6 pattern 0x00055f5f
+
+[VV] LED index 7 pattern 0x000575df
+
+[VV] LED index 8 pattern 0x000575f5
+
+LED model: HMD LEDs
+{ .pos = {62654.000000,-32369.000000,67489.000000}, .dir={0.181956,-0.102972,0.977900}, .pattern=0x1 },
+{ .pos = {77223.000000,461.000000,65695.000000}, .dir={0.299055,0.001984,0.954234}, .pattern=0x6 },
+{ .pos = {28810.000000,-18973.000000,73225.000000}, .dir={0.082983,-0.096960,0.991823}, .pattern=0x1a },
+{ .pos = {-84.000000,-32855.000000,72204.000000}, .dir={0.000000,-0.188028,0.982164}, .pattern=0x1d },
+{ .pos = {-29034.000000,-18976.000000,73084.000000}, .dir={-0.082983,-0.096960,0.991823}, .pattern=0x28 },
+{ .pos = {-63028.000000,-32148.000000,67397.000000}, .dir={-0.181956,-0.102972,0.977900}, .pattern=0x2f },
+{ .pos = {-77294.000000,854.000000,65431.000000}, .dir={-0.299055,0.001984,0.954234}, .pattern=0x33 },
+{ .pos = {-54350.000000,34509.000000,68657.000000}, .dir={-0.140969,0.134957,0.980772}, .pattern=0x4b },
+{ .pos = {-20134.000000,18154.000000,74056.000000}, .dir={-0.056979,0.095951,0.993754}, .pattern=0x4c },
+{ .pos = {54622.000000,34265.000000,68937.000000}, .dir={0.140969,0.134957,0.980772}, .pattern=0x57 },
+{ .pos = {20263.000000,18178.000000,74162.000000}, .dir={0.056979,0.095951,0.993754}, .pattern=0x62 },
+{ .pos = {-79039.000000,-12212.000000,28231.000000}, .dir={-0.993057,-0.099980,-0.061984}, .pattern=0x65 },
+{ .pos = {-77552.000000,-12192.000000,-8267.000000}, .dir={-0.981566,-0.188915,-0.028963}, .pattern=0x79 },
+{ .pos = {-70753.000000,-31449.000000,10335.000000}, .dir={-0.734056,-0.668042,-0.121987}, .pattern=0x7e },
+{ .pos = {-58842.000000,-40811.000000,36299.000000}, .dir={-0.153997,-0.983099,-0.099003}, .pattern=0x90 },
+{ .pos = {58971.000000,-40839.000000,36300.000000}, .dir={0.153997,-0.983099,-0.099003}, .pattern=0xa4 },
+{ .pos = {28410.000000,-43608.000000,61449.000000}, .dir={-0.004975,-0.998636,-0.051974}, .pattern=0x114 },
+{ .pos = {-80491.000000,-24821.000000,53426.000000}, .dir={-0.947594,-0.225904,-0.225904}, .pattern=0x151 },
+{ .pos = {-27805.000000,-43501.000000,61546.000000}, .dir={0.004975,-0.998636,-0.051974}, .pattern=0x183 },
+{ .pos = {70860.000000,-31459.000000,10270.000000}, .dir={0.734056,-0.668042,-0.121987}, .pattern=0x18c },
+{ .pos = {77793.000000,-12100.000000,-8406.000000}, .dir={0.981566,-0.188915,-0.028963}, .pattern=0x199 },
+{ .pos = {79193.000000,-12109.000000,28388.000000}, .dir={0.993057,-0.099980,-0.061984}, .pattern=0x1aa },
+{ .pos = {80545.000000,-24740.000000,53463.000000}, .dir={0.947594,-0.225904,-0.225904}, .pattern=0x1b5 },
+{ .pos = {-29035.000000,43600.000000,57635.000000}, .dir={-0.004975,0.999980,0.003998}, .pattern=0x1c0 },
+{ .pos = {-78208.000000,29387.000000,53097.000000}, .dir={-0.871752,0.428856,-0.236921}, .pattern=0x1cf },
+{ .pos = {72246.000000,30713.000000,149.000000}, .dir={0.816019,0.577024,-0.033998}, .pattern=0x1d6 },
+{ .pos = {66819.000000,37673.000000,29726.000000}, .dir={0.526908,0.847875,-0.058962}, .pattern=0x1e9 },
+{ .pos = {78039.000000,29271.000000,52974.000000}, .dir={0.871752,0.428856,-0.236921}, .pattern=0x1f3 },
+{ .pos = {28870.000000,43476.000000,57414.000000}, .dir={0.004975,0.999980,0.003998}, .pattern=0x1fc },
+{ .pos = {-67056.000000,37691.000000,29976.000000}, .dir={-0.526908,0.847875,-0.058962}, .pattern=0x230 },
+{ .pos = {-72214.000000,30481.000000,328.000000}, .dir={-0.816019,0.577024,-0.033998}, .pattern=0x252 },
+{ .pos = {-41308.000000,43391.000000,23572.000000}, .dir={-0.041995,0.999110,-0.003998}, .pattern=0x282 },
+{ .pos = {-114.000000,43867.000000,33431.000000}, .dir={0.005982,0.999932,0.009980}, .pattern=0x285 },
+{ .pos = {41024.000000,43188.000000,23313.000000}, .dir={0.041995,0.999110,-0.003998}, .pattern=0x29b },
+{ .pos = {-11696.000000,25806.000000,-164146.000000}, .dir={-0.208077,0.144049,-0.967447}, .pattern=0x29c },
+{ .pos = {-24016.000000,7052.000000,-160954.000000}, .dir={-0.421008,-0.007996,-0.907022}, .pattern=0x2ae },
+{ .pos = {-32898.000000,-11805.000000,-153813.000000}, .dir={-0.493130,-0.214031,-0.843216}, .pattern=0x2b7 },
+{ .pos = {-40291.000000,-31381.000000,-139963.000000}, .dir={-0.505856,-0.473871,-0.720802}, .pattern=0x2c8 },
+{ .pos = {-15050.000000,-42141.000000,-143041.000000}, .dir={-0.147928,-0.689771,-0.708754}, .pattern=0x2d1 },
+{ .pos = {14955.000000,-42260.000000,-142818.000000}, .dir={0.147928,-0.689771,-0.708754}, .pattern=0x2e3 },
+{ .pos = {40052.000000,-31248.000000,-139999.000000}, .dir={0.505856,-0.473871,-0.720802}, .pattern=0x2ed },
+{ .pos = {32807.000000,-11606.000000,-154013.000000}, .dir={0.493130,-0.214031,-0.843216}, .pattern=0x2fa },
+{ .pos = {24133.000000,7293.000000,-161127.000000}, .dir={0.421008,-0.007996,-0.907022}, .pattern=0x307 },
+{ .pos = {12004.000000,26290.000000,-164121.000000}, .dir={0.208077,0.144049,-0.967447}, .pattern=0x309 },
+Found Rift Sensor 0 w/ Serial WMTD302K700DBP. Connecting to Radio address 0xa6bd7496e0
+remote state: "connecting"
+stream state: "connecting"
+stream state: "connecting"
+[II] Sensor 0 starting stream
+
+[VV] Sensor 0 enabling exposure sync
+
+stream state: "configure"
+stream state: "configure"
+UVC PTS changed in-frame at 16372 bytes. Lost 1 ms
+Temperature: 37.4 °C
+[VV] Sensor 0 - setting up radio
+
+UVC frame buffer overflow: 1223404 + 7692 > 1228800
+UVC frame buffer overflow: 1223404 + 8000 > 1228800
+UVC frame buffer overflow: 1223404 + 6076 > 1228800
+[VV] Sensor 0 - reading Calibration
+
+ f = [ 714.043 714.043 ], c = [ 627.856 472.477 ]
+ k = [  0.072126 -0.024442  0.005924 -0.000704 ]
+[II] Sensor 0 ready
+
+Found Rift Sensor 1 w/ Serial WMTD303L400FNS. Connecting to Radio address 0xa6bd7496e0
+stream state: "connecting"
+stream state: "connecting"
+[II] Sensor 1 starting stream
+
+[VV] Sensor 1 enabling exposure sync
+
+stream state: "configure"
+stream state: "configure"
+Temperature: 40.0 °C
+[VV] Sensor 1 - setting up radio
+
+[VV] Sensor 1 - reading Calibration
+
+ f = [ 715.903 715.903 ], c = [ 632.402 461.695 ]
+ k = [  0.065454 -0.015051 -0.000024  0.000619 ]
+[II] Sensor 1 ready
+
+Opened 2 Rift Sensor cameras
+OpenGL Renderer: GeForce GTX 970/PCIe/SSE2
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Version: 4.6.0 NVIDIA 435.21
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+UVC Sending short frame: 1102000 < 1228800 (126800 lost)
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 10 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+UVC Sending short frame: 1110208 < 1228800 (118592 lost)
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 7 LEDs matched 11 visible ones
+Found good pose match - 7 LEDs matched 11 visible ones
+Found good pose match - 7 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 7 LEDs matched 11 visible ones
+Found good pose match - 7 LEDs matched 11 visible ones
+Found good pose match - 7 LEDs matched 11 visible ones
+Found good pose match - 7 LEDs matched 11 visible ones
+Found good pose match - 6 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 10 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 10 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 7 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 8 LEDs matched 11 visible ones
+Found good pose match - 9 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 8 LEDs matched 11 visible ones
+Found good pose match - 9 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 6 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched 11 visible ones
+Found good pose match - 11 LEDs matched
