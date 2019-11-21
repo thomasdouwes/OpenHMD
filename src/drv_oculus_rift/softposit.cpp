@@ -27,12 +27,6 @@ void softposit_free_object(Object *obj) {
 }
 
 
-typedef struct {
-  size_t width, height;
-  size_t data_len;
-  double* data;
-} assign_mat;
-
 void assign_resize(assign_mat *mat, size_t width, size_t height);
 
 assign_mat assign_mat_new(size_t width, size_t height) {
@@ -312,55 +306,233 @@ void print_mat(const char* name, cv::Mat* m) {
   }
 }
 
-void softposit(
-  std::vector<Object*> objects, 
-  std::vector<cv::Point2f> image_points
-  ) {
-  // this can be larger with a guessed initial pose
-  double beta = 0.0004; // anealing amount? TODO: Better name
-  double beta_final = 0.5; //0.5;
-  double beta_update = 1.05; // must be > 1, multiplied to beta until beta_final
-  double small = 0.01; // TODO: This is a guess, What should this be?
-  double focal_length = 1.0; // TODO: What should this be?
+softposit_data* softposit_new() {
+  softposit_data *data = new softposit_data;
 
-  double alpha = 0.01; // TODO: This needs to be computed somehow!
+  data->beta_final = 0.5;
+  data->beta_update = 1.05;
+  data->small = 0.1;
+  data->focal_length = 1.0; // ?
+  data->alpha = 1; // TODO: This is often computed based on noise in the image.
 
-  size_t num_image_points = image_points.size();
-  size_t num_objects = objects.size();
-  size_t num_object_points = 0;
+  data->assign1 = assign_mat_new(0, 0);
+  data->assign2 = assign_mat_new(0, 0);
 
+  return data;
+}
+
+void softposit_free(softposit_data* data) {
+  assign_mat_free(&data->assign1);
+  assign_mat_free(&data->assign2);
+  delete data;
+}
+
+void softposit_add_object(softposit_data* data, Object *obj) {
+  data->num_object_points += obj->points.size();
+  data->correction.resize(data->num_object_points);
+}
+
+void softposit_init(
+  softposit_data *data,
+  const std::vector<cv::Point2f> &image_points
+) {
   size_t i, o, j, k;
 
-
-
-  // printf("softposit start\n");
-
-  for (o = 0, k = 0; o < num_objects; o++) {
-    num_object_points += objects[o]->points.size();
+  for (o = 0, k = 0; o < data->objects.size(); o++) {
+    // TODO: Calculate pose vectors from initial rot/trans
     // objects[o]->pose1 = cv::Scalar(1);
     // objects[o]->pose2 = cv::Scalar(1);
-    randu(objects[o]->pose1, cv::Scalar(-10.0), cv::Scalar(10.0));
-    randu(objects[o]->pose2, cv::Scalar(-10.0), cv::Scalar(10.0));
+    randu(data->objects[o]->pose1, cv::Scalar(-10.0), cv::Scalar(10.0));
+    randu(data->objects[o]->pose2, cv::Scalar(-10.0), cv::Scalar(10.0));
 
-    for (i = 0; i < objects[o]->points.size(); i++, k++) {
+    for (i = 0; i < data->objects[o]->points.size(); i++, k++) {
       printf("%ld ", k);
-      print_vec("objpoint", v3_to_v4(objects[o]->points[i], 1));
+      print_vec("objpoint", v3_to_v4(data->objects[o]->points[i], 1));
     }
   }
-  for (j = 0; j < num_image_points; j++) {
+  for (j = 0; j < image_points.size(); j++) {
     printf("%ld imgpoint: %f %f \n", j, image_points[j].x, image_points[j].y);
   }
 
-  // printf("num_objects: %i\n", num_objects);
-  // printf("num_object_points: %i\n", num_object_points);
+  // initialize correction
+  for (k = 0; k < data->num_object_points; k++) {
+    data->correction[k] = 1;
+  }
 
-  std::vector<double> correction(num_object_points); // correction terms (w)
-  assign_mat assign1 = assign_mat_new(num_image_points, num_object_points);
-  assign_mat assign2 = assign_mat_new(num_image_points, num_object_points);
-  // cv::Mat assign1 = cv::Mat(num_image_points+1, num_object_points+1, CV_64F, cv::Scalar(0)); // (m i)
-  // cv::Mat assign2 = cv::Mat(num_image_points+1, num_object_points+1, CV_64F, cv::Scalar(0)); // (m i-1) -- alternates with assign1
-  // std::vector<double> images_sum(num_image_points+1); // sum of each row in assign
-  // std::vector<double> objects_sum(num_object_points+1); // sum of each column in assign
+  assign_resize(&data->assign1, image_points.size(), data->num_object_points);
+  assign_resize(&data->assign2, image_points.size(), data->num_object_points);
+}
+
+void softposit_squared_dists(
+  softposit_data *data,
+  const std::vector<cv::Point2f> &image_points,
+  double slack,
+  double beta
+) {
+  size_t i, o, j, k;
+  Object *obj;
+
+  for (o = 0, k = 0; o < data->objects.size(); o++) {
+    obj = data->objects[o];
+
+    // print_vec("pose1", objects[o]->pose1);
+    // print_vec("pose2", objects[o]->pose2);
+    for (i = 0; i < obj->points.size(); i++, k++) {
+      // printf("%ld %ld ", i, k);
+      // print_vec("point", v3_to_v4(objects[o]->points[i], 1));
+      double dot1 = obj->pose1.dot(v3_to_v4(obj->points[i], 1));
+      double dot2 = obj->pose2.dot(v3_to_v4(obj->points[i], 1));
+      // printf("dot1: %f\n", dot1);
+      if (isnan(dot1)) abort();
+
+      for (j = 0; j < image_points.size(); j++) {
+        
+        // compute squared distances
+        double distsq = 
+          pow(dot1 - data->correction[k] * image_points[j].x, 2.0) + 
+          pow(dot2 - data->correction[k] * image_points[j].y, 2.0);
+        
+        distsq += (rand() % 100) / 1000.0;
+        // printf("distsq: %f\n", distsq);
+        
+        // initialize assign
+        double val = slack * exp(-beta * (distsq - data->alpha)); // what is alpha?
+        assign_set(&data->assign1, j, k, val);
+      }
+    }
+  }
+}
+
+cv::Mat softposit_compute_L_inv(
+  softposit_data *data,
+  assign_mat *assign
+) {
+  size_t i, o, k;
+  Object *obj;
+
+  // compute 4x4 matrix L TODO: Better name?
+  cv::Mat L(4, 4, CV_64F, cv::Scalar(0));
+  for (o = 0, k = 0; o < data->objects.size(); o++) {
+    obj = data->objects[o];
+    for (i = 0; i < obj->points.size(); i++, k++) {
+      // printf("L 1...");
+      cv::Mat a = cv::Mat(v3_to_v4(obj->points[i], 1));
+      // print_mat("L a", &a);
+      cv::Mat tmp = cv::Mat(a * a.t());
+      // print_mat("L tmp", &tmp);
+      // printf("objects_sum[k]: %f\n", objects_sum[k]);
+      L += assign_rowsum(assign, k) * tmp;
+      // printf("L 4...");
+    }
+  }
+
+  // L /= 10000.0;
+  print_mat("L", &L);
+
+  cv::Mat L_inv = L.inv();
+  print_mat("L_inv", &L_inv);
+
+  return L_inv;
+}
+
+void softposit_update_pose_vectors(
+  softposit_data *data,
+  const std::vector<cv::Point2f> &image_points,
+  assign_mat *assign,
+  cv::Mat &L_inv,
+  size_t &k,
+  Object *obj
+) {
+  size_t i, j;
+  cv::Vec4d tmp;
+
+  obj->pose1 = cv::Scalar(0);
+  obj->pose2 = cv::Scalar(0);
+
+  for (i = 0; i < obj->points.size(); i++, k++) {
+    for (j = 0; j < image_points.size(); j++) {
+      tmp = assign_get(assign, j, k) * data->correction[k] * v3_to_v4(obj->points[i], 1);
+      print_vec("tmp", tmp);
+      cv::Vec4d a = obj->pose1 + tmp * image_points[j].x;
+      print_vec("a", a);
+      obj->pose1 = a;
+      print_vec("pose1", obj->pose1);
+      obj->pose2 = cv::Vec4d(obj->pose2 + tmp * image_points[j].y);
+    }
+  }
+  
+  obj->pose1 = cv::Mat(L_inv * obj->pose1);
+  obj->pose2 = cv::Mat(L_inv * obj->pose2);
+}
+
+double softposit_compute_scaling_factor_inv(
+  Object *obj
+) {
+  return 1.0/sqrt(
+    sqrt(pow(obj->pose1[0], 2.0) + pow(obj->pose1[1], 2.0) + pow(obj->pose1[2], 2.0)) *
+    sqrt(pow(obj->pose2[0], 2.0) + pow(obj->pose2[1], 2.0) + pow(obj->pose2[2], 2.0))
+  );
+}
+
+void softposit_compute_rot_trans(
+  softposit_data *data,
+  Object *obj,
+  double s_inv
+) {
+  cv::Vec4d rtmp = obj->pose1 * s_inv;
+  // print_vec("pose1 * s_inv", rtmp);
+  obj->rotation.at<double>(0, 0) = rtmp[0];
+  obj->rotation.at<double>(0, 1) = rtmp[1];
+  obj->rotation.at<double>(0, 2) = rtmp[2];
+  rtmp = obj->pose2 * s_inv;
+  // print_vec("pose2 * s_inv", rtmp);
+  obj->rotation.at<double>(1, 0) = rtmp[0];
+  obj->rotation.at<double>(1, 1) = rtmp[1];
+  obj->rotation.at<double>(1, 2) = rtmp[2];
+  cv::Vec3d r3tmp = cv::Vec3d(obj->rotation.row(0)).cross(cv::Vec3d(obj->rotation.row(1)));
+  // print_vec("r1 x r2", r3tmp);
+  obj->rotation.at<double>(2, 0) = r3tmp[0];
+  obj->rotation.at<double>(2, 1) = r3tmp[1];
+  obj->rotation.at<double>(2, 2) = r3tmp[2]; // R3
+  print_mat("rot", &obj->rotation);
+
+  // printf("softposit compute trans\n");
+
+  obj->translation[0] = obj->pose1[3] * s_inv; // T1
+  obj->translation[1] = obj->pose2[3] * s_inv; // T2
+  obj->translation[2] = data->focal_length * s_inv; // T3
+  print_vec("trans", obj->translation);
+}
+
+void softposit_compute_correction(
+  softposit_data *data
+) {
+  size_t i, o, k;
+  Object *obj;
+
+  for (o = 0, k = 0; o < data->objects.size(); o++) {
+    obj = data->objects[o];
+    for (i = 0; i < obj->points.size(); i++, k++) {
+      data->correction[k] = cv::Vec3d(obj->rotation.row(2)).dot(obj->points[i])/obj->translation[2] + 1;
+    }
+  }
+}
+
+void softposit(
+  softposit_data *data,
+  const std::vector<cv::Point2f> &image_points
+) {
+  // this can be larger with a guessed initial pose
+  double beta = 0.0004; // anealing amount? TODO: Better name
+  double beta_final = data->beta_final;
+  double small = data->small; // TODO: This is a guess, What should this be?
+
+  size_t num_image_points = image_points.size();
+  size_t num_objects = data->objects.size();
+  size_t num_object_points = data->num_object_points;
+
+
+  softposit_init(data, image_points);
 
   size_t size = num_object_points > num_image_points? num_object_points : num_image_points;
   double slack = 1.0/(2*size + 1.0); // better name?
@@ -368,12 +540,8 @@ void softposit(
 
   // printf("softposit init\n");
   // initialize slack elements of assign
-  assign_set_all_slack(&assign1, slack);
+  assign_set_all_slack(&data->assign1, slack);
 
-  // initialize correction
-  for (k = 0; k < num_object_points; k++) {
-    correction[k] = 1;
-  }
 
   // deterministic annealing loop
   while (beta < beta_final) {
@@ -381,148 +549,43 @@ void softposit(
     printf("\n\nsoftposit loop start beta: %f\n", beta);
 
     // is this a good idea?
-    assign_set_all_slack(&assign1, min(slack, beta * 2));
+    assign_set_all_slack(&data->assign1, min(slack, beta * 2));
 
-    for (o = 0, k = 0; o < num_objects; o++) {
-      // print_vec("pose1", objects[o]->pose1);
-      // print_vec("pose2", objects[o]->pose2);
-      for (i = 0; i < objects[o]->points.size(); i++, k++) {
-        // printf("%ld %ld ", i, k);
-        // print_vec("point", v3_to_v4(objects[o]->points[i], 1));
-        double dot1 = objects[o]->pose1.dot(v3_to_v4(objects[o]->points[i], 1));
-        double dot2 = objects[o]->pose2.dot(v3_to_v4(objects[o]->points[i], 1));
-        // printf("dot1: %f\n", dot1);
-        if (isnan(dot1)) abort();
+    softposit_squared_dists(data, image_points, slack, beta);
 
-        for (j = 0; j < num_image_points; j++) {
-          
-          // compute squared distances
-          double distsq = 
-            pow(dot1 - correction[k] * image_points[j].x, 2.0) + 
-            pow(dot2 - correction[k] * image_points[j].y, 2.0);
-          
-          distsq += (rand() % 100) / 1000.0;
-          // printf("distsq: %f\n", distsq);
-          
-          // initialize assign
-          double val = slack * exp(-beta * (distsq - alpha)); // what is alpha?
-          assign_set(&assign1, j, k, val);
-        }
-      }
-    }
-
-    printf("assign1:\n"); assign_print(&assign1);
+    printf("assign1:\n"); assign_print(&data->assign1);
 
 
     printf("softposit softassign\n");
 
-    assign_mat *assign = assign_normalize(&assign2, &assign1, small, beta * 2);
+    assign_mat *assign = assign_normalize(&data->assign2, &data->assign1, small, beta * 2);
 
-    // print_vector("images_sum", images_sum);
-    // print_vector("objects_sum", objects_sum);
-
-    // printf("softposit compute L\n");
-
-    // compute 4x4 matrix L TODO: Better name?
-    cv::Mat L(4, 4, CV_64F, cv::Scalar(0));
-    for (o = 0, k = 0; o < num_objects; o++) {
-      for (i = 0; i < objects[o]->points.size(); i++, k++) {
-        // printf("L 1...");
-        cv::Mat a = cv::Mat(v3_to_v4(objects[o]->points[i], 1));
-        // print_mat("L a", &a);
-        cv::Mat tmp = cv::Mat(a * a.t());
-        // print_mat("L tmp", &tmp);
-        // printf("objects_sum[k]: %f\n", objects_sum[k]);
-        L += assign_rowsum(assign, k) * tmp;
-        // printf("L 4...");
-      }
-    }
-
-    // L /= 10000.0;
-    print_mat("L", &L);
-
-    cv::Mat L_inv = L.inv();
-    print_mat("L_inv", &L_inv);
+    cv::Mat L_inv = softposit_compute_L_inv(data, assign);
 
     // compute new Q1 and Q2
-    cv::Vec4d tmp;
-    for (o = 0, k = 0; o < num_objects; o++) {
-      objects[o]->pose1 = cv::Scalar(0);
-      objects[o]->pose2 = cv::Scalar(0);
+    for (size_t o = 0, k = 0; o < num_objects; o++) {
+      Object *obj = data->objects[o];
 
-      // printf("softposit compute pose1 pose2\n");
+      softposit_update_pose_vectors(data, image_points, assign, L_inv, k, obj);
 
-      for (i = 0; i < objects[o]->points.size(); i++, k++) {
-        for (j = 0; j < num_image_points; j++) {
-          tmp = assign_get(assign, j, k) * correction[k] * v3_to_v4(objects[o]->points[i], 1);
-          print_vec("tmp", tmp);
-          cv::Vec4d a = objects[o]->pose1 + tmp * image_points[j].x;
-          print_vec("a", a);
-          objects[o]->pose1 = a;
-          print_vec("pose1", objects[o]->pose1);
-          objects[o]->pose2 = cv::Vec4d(objects[o]->pose2 + tmp * image_points[j].y);
-        }
-      }
-      
-      objects[o]->pose1 = cv::Mat(L_inv * objects[o]->pose1);
-      objects[o]->pose2 = cv::Mat(L_inv * objects[o]->pose2);
+      print_vec("pose1", obj->pose1);
+      print_vec("pose2", obj->pose2);
 
-      print_vec("pose1", objects[o]->pose1);
-      print_vec("pose2", objects[o]->pose2);
-
-      // printf("softposit compute s_inv\n");
-
-      double s_inv = 1.0/sqrt(
-        sqrt(pow(objects[o]->pose1[0], 2.0) + pow(objects[o]->pose1[1], 2.0) + pow(objects[o]->pose1[2], 2.0)) *
-        sqrt(pow(objects[o]->pose2[0], 2.0) + pow(objects[o]->pose2[1], 2.0) + pow(objects[o]->pose2[2], 2.0))
-      );
+      double s_inv = softposit_compute_scaling_factor_inv(obj);
 
       printf("s_inv: %f\n", s_inv);
 
-      // printf("softposit compute rot\n");
-
-      cv::Vec4d rtmp = objects[o]->pose1 * s_inv;
-      // print_vec("pose1 * s_inv", rtmp);
-      objects[o]->rotation.at<double>(0, 0) = rtmp[0];
-      objects[o]->rotation.at<double>(0, 1) = rtmp[1];
-      objects[o]->rotation.at<double>(0, 2) = rtmp[2];
-      rtmp = objects[o]->pose2 * s_inv;
-      // print_vec("pose2 * s_inv", rtmp);
-      objects[o]->rotation.at<double>(1, 0) = rtmp[0];
-      objects[o]->rotation.at<double>(1, 1) = rtmp[1];
-      objects[o]->rotation.at<double>(1, 2) = rtmp[2];
-      cv::Vec3d r3tmp = cv::Vec3d(objects[o]->rotation.row(0)).cross(cv::Vec3d(objects[o]->rotation.row(1)));
-      // print_vec("r1 x r2", r3tmp);
-      objects[o]->rotation.at<double>(2, 0) = r3tmp[0];
-      objects[o]->rotation.at<double>(2, 1) = r3tmp[1];
-      objects[o]->rotation.at<double>(2, 2) = r3tmp[2]; // R3
-      print_mat("rot", &objects[o]->rotation);
-
-      // printf("softposit compute trans\n");
-
-      objects[o]->translation[0] = objects[o]->pose1[3] * s_inv; // T1
-      objects[o]->translation[1] = objects[o]->pose2[3] * s_inv; // T2
-      objects[o]->translation[2] = focal_length * s_inv; // T3
-      print_vec("trans", objects[o]->translation);
+      softposit_compute_rot_trans(data, obj, s_inv);
 
     }
 
-    // printf("softposit compute correction\n");
+    softposit_compute_correction(data);
+    print_vector("correction", data->correction);
 
-    for (o = 0, k = 0; o < num_objects; o++) {
-      for (i = 0; i < objects[o]->points.size(); i++, k++) {
-        correction[k] = cv::Vec3d(objects[o]->rotation.row(2)).dot(objects[o]->points[i])/objects[o]->translation[2] + 1;
-      }
-    }
-    print_vector("correction", correction);
-
-    beta *= beta_update;
+    beta *= data->beta_update;
     // break;
   }
 
   printf("softposit done\n");
-  printf("assign1:\n"); assign_print(&assign1);
-
-  assign_mat_free(&assign1);
-  assign_mat_free(&assign2);
+  printf("assign1:\n"); assign_print(&data->assign1);
 }

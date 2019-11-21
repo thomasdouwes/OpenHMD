@@ -23,7 +23,41 @@ typedef struct {
 Object* softposit_new_object(std::vector<cv::Vec3d> points);
 void softposit_free_object(Object* obj);
 
-void softposit(std::vector<Object*> objects, std::vector<cv::Point2f> image_points);
+
+typedef struct {
+  size_t width, height;
+  size_t data_len;
+  double* data;
+} assign_mat;
+
+
+typedef struct {
+
+  size_t num_object_points;
+  double beta_final;
+  double beta_update; // must be > 1, multiplied to beta until beta_final
+  double small;
+  double focal_length;
+  double alpha;
+
+  std::vector<Object*> objects;
+
+  std::vector<double> correction; // correction terms (w)
+  assign_mat assign1;
+  assign_mat assign2;
+
+} softposit_data;
+
+softposit_data* softposit_new();
+
+void softposit_free(softposit_data* data);
+
+void softposit_add_object(softposit_data* data, Object *obj);
+
+void softposit(
+  softposit_data *data,
+  const std::vector<cv::Point2f> &image_points
+);
 
 #endif /* SOFTPOSIT_H */
 

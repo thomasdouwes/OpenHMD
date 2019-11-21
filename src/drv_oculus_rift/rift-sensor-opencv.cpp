@@ -103,7 +103,7 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 	num_leds = j;
 	if (num_leds < 4)
 		return false;
-		num_leds = 4;
+	num_leds = 4; // HACK to simplify softposit debug
 	list_points3d.resize(num_leds);
 	list_points2d.resize(num_leds);
 	list_points2d_undistorted.resize(num_leds);
@@ -124,24 +124,27 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 	cv::solvePnPRansac(list_points3d, list_points2d_undistorted, dummyK, dummyD, rvec, tvec,
 			   use_extrinsic_guess, iterationsCount, reprojectionError,
 			   confidence, inliers, flags);
-				 
-	std::vector<Object*> objects(1);
-	objects[0] = softposit_new_object(list_points3d_all);
 
-	softposit(objects, list_points2d_undistorted);
+	Object *obj = softposit_new_object(list_points3d_all);
+				 
+	softposit_data *sp = softposit_new();
+	softposit_add_object(sp, obj);
+
+	softposit(sp, list_points2d_undistorted);
 
 	printf("PnPRansac rot: %f %f %f\n", rvec.at<double>(0), rvec.at<double>(1), rvec.at<double>(2));
 	printf("PnPRansac trans: %f %f %f\n", tvec.at<double>(0), tvec.at<double>(1), tvec.at<double>(2));
 
-	// cv::Rodrigues(objects[0]->rotation, rvec);
-	printf("softposit rot: %f %f %f\n", objects[0]->rotation.at<double>(0, 0), objects[0]->rotation.at<double>(0, 1), objects[0]->rotation.at<double>(0, 2));
-	printf("               %f %f %f\n", objects[0]->rotation.at<double>(1, 0), objects[0]->rotation.at<double>(1, 1), objects[0]->rotation.at<double>(1, 2));
-	printf("               %f %f %f\n", objects[0]->rotation.at<double>(2, 0), objects[0]->rotation.at<double>(2, 1), objects[0]->rotation.at<double>(2, 2));
+	// cv::Rodrigues(obj->rotation, rvec);
+	printf("softposit rot: %f %f %f\n", obj->rotation.at<double>(0, 0), obj->rotation.at<double>(0, 1), obj->rotation.at<double>(0, 2));
+	printf("               %f %f %f\n", obj->rotation.at<double>(1, 0), obj->rotation.at<double>(1, 1), obj->rotation.at<double>(1, 2));
+	printf("               %f %f %f\n", obj->rotation.at<double>(2, 0), obj->rotation.at<double>(2, 1), obj->rotation.at<double>(2, 2));
 
-	tvec = objects[0]->translation;
-	printf("softposit trans: %f %f %f %f\n", objects[0]->translation[0], objects[0]->translation[1], objects[0]->translation[2], objects[0]->translation[3]);
+	tvec = obj->translation;
+	printf("softposit trans: %f %f %f %f\n", obj->translation[0], obj->translation[1], obj->translation[2], obj->translation[3]);
 
-	softposit_free_object(objects[0]);
+	softposit_free_object(obj);
+	softposit_free(sp);
 
 	abort();
 
