@@ -38,6 +38,7 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 {
 	int i, j;
 	int num_leds = 0;
+	int num_matched = 0;
 	uint64_t taken = 0;
 	int flags = CV_ITERATIVE;
 	cv::Mat inliers;
@@ -52,11 +53,17 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 	cv::Mat tvec = cv::Mat::zeros(3, 1, CV_64FC1);
 	cv::Mat R = cv::Mat::zeros(3, 3, CV_64FC1);
 
+
+	if (num_blobs < 4) {
+		printf("Not enough blobs: %d\n", num_blobs);
+		return false;
+	}
+
 	for (i = 0; i < 3; i++)
 		tvec.at<double>(i) = trans->arr[i];
 
 	quatf_to_3x3 (R, rot);
-	// cv::Rodrigues(R, rvec);
+	cv::Rodrigues(R, rvec);
 
 	//cout << "R = " << R << ", rvec = " << rvec << endl;
 
@@ -71,13 +78,16 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 	}
 	*num_leds_out = num_leds;
 
-	if (num_leds < 4)
-		return false;
+	// if (num_leds < 4)
+	// 	return false;
 
 	std::vector<cv::Vec3d> list_points3d(num_leds);
-	std::vector<cv::Vec3d> list_points3d_all(5 /*num_led_pos*/);
 	std::vector<cv::Point2f> list_points2d(num_leds);
 	std::vector<cv::Point2f> list_points2d_undistorted(num_leds);
+
+	std::vector<cv::Vec3d> list_points3d_all(num_led_pos);
+	std::vector<cv::Point2f> list_points2d_all(num_blobs);
+	std::vector<cv::Point2f> list_points2d_all_undistorted(num_blobs);
 
 	taken = 0;
 	for (i = 0, j = 0; i < num_blobs && j < num_leds; i++) {
@@ -100,45 +110,57 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 		    leds[blobs[i].led_id].pos.z);
 	}
 
-	num_leds = j;
-	if (num_leds < 4)
+	num_matched = j;
+	if (num_matched < 4) {
+		// printf("Not enough leds: %d\n", num_matched);
 		return false;
-	num_leds = 4; // HACK to simplify softposit debug
-	list_points3d.resize(num_leds);
-	list_points2d.resize(num_leds);
-	list_points2d_undistorted.resize(num_leds);
+	}
+	// num_matched = 4; // HACK to simplify softposit debug
+	list_points3d.resize(num_matched);
+	list_points2d.resize(num_matched);
+	list_points2d_undistorted.resize(num_matched);
 
-	for (j = 0; j < 5/*num_led_pos*/; j++) {
-		list_points3d_all[j][0] = leds[j].pos.x/1000000.0;
-		list_points3d_all[j][1] = leds[j].pos.y/1000000.0;
-		list_points3d_all[j][2] = leds[j].pos.z/1000000.0;
+	for (i = 0; i < num_blobs; i++) {
+		list_points2d_all[j].x = blobs[i].x;
+		list_points2d_all[j].y = blobs[i].y;
+	}
+	for (j = 0; j < num_led_pos; j++) {
+		list_points3d_all[j][0] = leds[j].pos.x;
+		list_points3d_all[j][1] = leds[j].pos.y;
+		list_points3d_all[j][2] = leds[j].pos.z;
 	}
 
 	// we have distortion params for the openCV fisheye model
 	// so we undistort the image points manually before passing them to the PnpRansac solver
 	// and we give the solver identity camera + null distortion matrices
 	cv::fisheye::undistortPoints(list_points2d, list_points2d_undistorted, fishK, fishDistCoeffs);
+	cv::fisheye::undistortPoints(list_points2d_all, list_points2d_all_undistorted, fishK, fishDistCoeffs);
 
 	// printf("Setting up softposit...\n");
 
-	cv::solvePnPRansac(list_points3d, list_points2d_undistorted, dummyK, dummyD, rvec, tvec,
-			   use_extrinsic_guess, iterationsCount, reprojectionError,
-			   confidence, inliers, flags);
+	if (num_matched >= 4) {
+		cv::solvePnPRansac(list_points3d, list_points2d_undistorted, dummyK, dummyD, rvec, tvec,
+					use_extrinsic_guess, iterationsCount, reprojectionError,
+					confidence, inliers, flags);
+	}
 
 	Object *obj = softposit_new_object(list_points3d_all);
 				 
 	softposit_data *sp = softposit_new();
 	softposit_add_object(sp, obj);
 
-	softposit(sp, list_points2d_undistorted);
+	softposit(sp, list_points2d_all_undistorted);
 
-	printf("PnPRansac rot: %f %f %f\n", rvec.at<double>(0), rvec.at<double>(1), rvec.at<double>(2));
-	printf("PnPRansac trans: %f %f %f\n", tvec.at<double>(0), tvec.at<double>(1), tvec.at<double>(2));
+	if (num_matched >= 4) {
+		printf("PnPRansac rot: %f %f %f\n", rvec.at<double>(0), rvec.at<double>(1), rvec.at<double>(2));
+		printf("PnPRansac trans: %f %f %f\n", tvec.at<double>(0), tvec.at<double>(1), tvec.at<double>(2));
+	}
 
-	// cv::Rodrigues(obj->rotation, rvec);
-	printf("softposit rot: %f %f %f\n", obj->rotation.at<double>(0, 0), obj->rotation.at<double>(0, 1), obj->rotation.at<double>(0, 2));
-	printf("               %f %f %f\n", obj->rotation.at<double>(1, 0), obj->rotation.at<double>(1, 1), obj->rotation.at<double>(1, 2));
-	printf("               %f %f %f\n", obj->rotation.at<double>(2, 0), obj->rotation.at<double>(2, 1), obj->rotation.at<double>(2, 2));
+	cv::Rodrigues(obj->rotation, rvec);
+	printf("softposit rot: %f %f %f\n", rvec.at<double>(0), rvec.at<double>(1), rvec.at<double>(2));
+	// printf("softposit rot: %f %f %f\n", obj->rotation.at<double>(0, 0), obj->rotation.at<double>(0, 1), obj->rotation.at<double>(0, 2));
+	// printf("               %f %f %f\n", obj->rotation.at<double>(1, 0), obj->rotation.at<double>(1, 1), obj->rotation.at<double>(1, 2));
+	// printf("               %f %f %f\n", obj->rotation.at<double>(2, 0), obj->rotation.at<double>(2, 1), obj->rotation.at<double>(2, 2));
 
 	tvec = obj->translation;
 	printf("softposit trans: %f %f %f %f\n", obj->translation[0], obj->translation[1], obj->translation[2], obj->translation[3]);
@@ -146,7 +168,7 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 	softposit_free_object(obj);
 	softposit_free(sp);
 
-	abort();
+	// abort();
 
 	vec3f v;
 	double angle = sqrt(rvec.dot(rvec));

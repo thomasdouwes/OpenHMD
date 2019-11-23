@@ -27,6 +27,9 @@ void softposit_free_object(Object* obj);
 typedef struct {
   size_t width, height;
   size_t data_len;
+  double assign_sum;
+  double assignsq_sum;
+  double slack_sum;
   double* data;
 } assign_mat;
 
