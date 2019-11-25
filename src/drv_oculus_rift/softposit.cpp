@@ -4,7 +4,7 @@
 
 using namespace std;
 
-#define SPDEBUG_ALL 0
+#define SPDEBUG_ALL 1
 #define SPDEBUG_INIT (SPDEBUG_ALL && 0)
 #define SPDEBUG_L (SPDEBUG_ALL && 0)
 #define SPDEBUG_ASSIGN (SPDEBUG_ALL && 0)
@@ -78,6 +78,11 @@ size_t _assign_idx(assign_mat *mat, size_t x, size_t y) {
   return y * mat->width + x;
 }
 
+double assign_get(assign_mat *mat, size_t x, size_t y) {
+  assign_assert_xy(mat, x, y);
+  return mat->data[_assign_idx(mat, x, y)];
+}
+
 size_t _assign_colslack(assign_mat *mat, size_t x) {
   return mat->width * mat->height + x;
 }
@@ -100,7 +105,13 @@ size_t _assign_colsum(assign_mat *mat, size_t x) {
 }
 
 double assign_colsum(assign_mat *mat, size_t x) {
-  return mat->data[_assign_colsum(mat, x)];
+  // return mat->data[_assign_colsum(mat, x)];
+  double sum = 0;
+  for (size_t y = 0; y < mat->height; y++) {
+    sum += assign_get(mat, x, y);
+  }
+  sum += assign_colslack(mat, x);
+  return sum;
 }
 
 size_t _assign_rowsum(assign_mat *mat, size_t y) {
@@ -114,7 +125,13 @@ size_t _assign_extra(assign_mat *mat, size_t i) {
 }
 
 double assign_rowsum(assign_mat *mat, size_t y) {
-  return mat->data[_assign_rowsum(mat, y)];
+  // return mat->data[_assign_rowsum(mat, y)];
+  double sum = 0;
+  for (size_t x = 0; x < mat->width; x++) {
+    sum += assign_get(mat, x, y);
+  }
+  sum += assign_rowslack(mat, y);
+  return sum;
 }
 
 double _assign_set_data_diff(assign_mat *mat, size_t idx, double val) {
@@ -131,10 +148,6 @@ double _assign_set_data_diff(assign_mat *mat, size_t idx, double val) {
 }
 
 
-double assign_get(assign_mat *mat, size_t x, size_t y) {
-  assign_assert_xy(mat, x, y);
-  return mat->data[_assign_idx(mat, x, y)];
-}
 
 void assign_set(assign_mat *mat, size_t x, size_t y, double val) {
   assign_assert_xy(mat, x, y);
@@ -177,8 +190,23 @@ void assign_set_all_slack(assign_mat *mat, double val) {
   }
 }
 
+// return the squared sum of normal elemnts in the assign matrix
+double assign_sqsum(assign_mat *assign) {
+  // return assign->assignsq_sum;
+  double sum = 0.0;
+  size_t x, y;
+
+  for (y = 0; y < assign->height; y++) {
+    for (x = 0; x < assign->width; x++) {
+      sum += pow(assign_get(assign, x, y), 2.0);
+    }
+  }
+
+  return sum;
+}
+
 void assign_print(assign_mat *mat) {
-  printf("sum: %f  sqsum: %f  slack_sum: %f\n", mat->assign_sum, mat->assignsq_sum, mat->slack_sum);
+  printf("sum: %f  sqsum: %f  slack_sum: %f\n", mat->assign_sum, assign_sqsum(mat), mat->slack_sum);
   for (size_t y = 0; y < mat->height; y++) {
     for (size_t x = 0; x < mat->width; x++) {
       printf("%.2f ", assign_get(mat, x, y));
@@ -195,8 +223,120 @@ void assign_print(assign_mat *mat) {
   printf("\n");
 }
 
-assign_mat *assign_normalize(assign_mat *assign2, assign_mat *assign1, double small, double max_slack) {
+// When normalizing, say, all the rows, all the main values and all the rowslack values get
+// scaled, leaving the colslack values out. This rescales those values based on how the sum changed
+// so that the colslack values stay somewhat proportional to the column's maximum value.
+void assign_rescale_rowslack(assign_mat *assign, assign_mat *assign_prev, double max_slack) {
+  size_t y;
+  
+  for (y = 0; y < assign->height; y++) {
+    double old_slack = assign_rowslack(assign_prev, y);
+    assign_set_rowslack(assign, y, old_slack);
+    double sum = assign_rowsum(assign, y);
+    double old_sum = assign->data[_assign_extra(assign, y)];
+    double slack = old_slack;
+    if (abs(old_sum - old_slack) > 0.0001) // avoid divide by 0 if slack is the only value in the row
+      slack = old_slack * (sum - old_slack) / (old_sum - old_slack);
+    // printf("scale slack: %f %f %f %f\n", old_sum, sum, old_slack, slack);
+    assign_set_rowslack(assign, y, min(slack, max_slack));
+  }
+}
+
+void assign_rescale_colslack(assign_mat *assign, assign_mat *assign_prev, double max_slack) {
+  size_t x;
+  
+  for (x = 0; x < assign->width; x++) {
+      double old_slack = assign_colslack(assign, x);
+      double sum = assign_colsum(assign, x);
+      double old_sum = assign->data[_assign_extra(assign, x)];
+      double slack = old_slack;
+      if (abs(old_sum - old_slack) > 0.0001)
+        slack = old_slack * (sum - old_slack) / (old_sum - old_slack);
+      slack = min(slack, max_slack);
+      // printf("scale slack: %f %f %f %f\n", old_sum, sum, old_slack, slack);
+      assign_set_colslack(assign, x, slack);
+    }
+}
+
+void assign_copy_colsum_to_extra(assign_mat *assign, assign_mat *assign_from) {
+  size_t x;
+  
+  for (x = 0; x < assign->width; x++) {
+    assign->data[_assign_extra(assign, x)] = assign_colsum(assign_from, x);
+  }
+}
+void assign_copy_rowsum_to_extra(assign_mat *assign, assign_mat *assign_from) {
+  size_t y;
+  
+  for (y = 0; y < assign->height; y++) {
+    assign->data[_assign_extra(assign, y)] = assign_rowsum(assign_from, y);
+  }
+}
+
+void assign_normalize_cols(assign_mat *assign, assign_mat *assign_prev, double max_slack) {
   size_t x, y;
+
+  for (x = 0; x < assign->width; x++) {
+    double inv_sum = 1.0 / assign_colsum(assign_prev, x);
+    // printf("assign_colsum(assign_prev, x): %f\n", assign_colsum(assign_prev, x));
+    // printf("inv_sum: %f\n", inv_sum);
+    for (y = 0; y < assign->height; y++) {
+      double val = assign_get(assign_prev, x, y) * inv_sum;
+      assign_set(assign, x, y, val);
+    }
+
+    double val = assign_colslack(assign_prev, x);
+    val *= inv_sum;
+    val = min(val, max_slack);
+    assign_set_colslack(assign, x, val);
+  }
+}
+
+void assign_normalize_rows(assign_mat *assign, assign_mat *assign_prev, double max_slack) {
+  size_t x, y;
+  
+  for (y = 0; y < assign->height; y++) {
+    double inv_sum = 1.0 / assign_rowsum(assign, y);
+    // printf("objects_sum[y]: %f\n", objects_sum[y]);
+    // printf("inv_sum: %f\n", inv_sum);
+    for (x = 0; x < assign->width; x++) {
+      double val = assign_get(assign_prev, x, y) * inv_sum;
+      assign_set(assign, x, y, val);
+    }
+
+    double val = assign_rowslack(assign, y);
+    val *= inv_sum;
+    val = min(val, max_slack);
+    assign_set_rowslack(assign, y, val);
+  }
+}
+
+double assign_norm_diff(assign_mat *assign, assign_mat *assign_prev) {
+  size_t x, y;
+  double assign_norm = 0;
+
+  for (x = 0; x < assign->width; x++) {
+    double val = assign_colslack(assign, x);
+    double prev = assign_colslack(assign_prev, x);
+    assign_norm += pow(val - prev, 2.0);
+  }
+  for (y = 0; y < assign->height; y++) {
+    for (x = 0; x < assign->width; x++) {
+      double val = assign_get(assign, x, y);
+      double prev = assign_get(assign_prev, x, y);
+      assign_norm += pow(val - prev, 2.0);
+    }
+
+    double val = assign_rowslack(assign, y);
+    double prev = assign_rowslack(assign_prev, y);
+    assign_norm += pow(val - prev, 2.0);
+  }
+
+  return assign_norm;
+}
+
+// softassign
+assign_mat *assign_normalize(assign_mat *assign2, assign_mat *assign1, double small, double max_slack) {
   // Sinkhorn's method?
   double assign_norm = 0, last_assign_norm = 0;
   assign_mat *assign = assign2;
@@ -206,90 +346,32 @@ assign_mat *assign_normalize(assign_mat *assign2, assign_mat *assign1, double sm
     assign_norm = 0;
 
     // save a copy of what rowsum is before normalizing
-    // for (y = 0; y < assign->height; y++) {
-    //   assign->data[_assign_extra(assign, y)] = assign_rowsum(assign_prev, y);
-    // }
+    assign_copy_rowsum_to_extra(assign, assign_prev);
+    assign_normalize_cols(assign, assign_prev, max_slack);
+    assign_rescale_rowslack(assign, assign_prev, max_slack);
 
-    // normalize nonslack rows
-    for (x = 0; x < assign->width; x++) {
-      double inv_sum = 1.0 / assign_colsum(assign_prev, x);
-      // printf("assign_colsum(assign_prev, x): %f\n", assign_colsum(assign_prev, x));
-      // printf("inv_sum: %f\n", inv_sum);
-      for (y = 0; y < assign->height; y++) {
-        assign_set(assign, x, y, assign_get(assign_prev, x, y) * inv_sum);
-      }
+    // first normalize copied from prev into assign, so we have to
+    // read rowsums from assign and write to assign here
+    assign_copy_colsum_to_extra(assign, assign);
+    assign_normalize_rows(assign, assign, max_slack);
+    assign_rescale_colslack(assign, assign_prev, max_slack);
 
-      double val = assign_colslack(assign_prev, x) * inv_sum;
-      assign_set_colslack(assign, x, min(val, max_slack));
+    assign_norm = assign_norm_diff(assign, assign_prev);
+    
+    if (SPDEBUG_ASSIGN) {
+      printf("assign_norm: %f  sum: %f  sqsum: %f  slack_sum: %f\n", assign_norm, assign->assign_sum, assign_sqsum(assign), assign->slack_sum);
+      printf("assign:\n"); assign_print(assign);
     }
-    // printf("assign.25:\n"); assign_print(assign);
-
-    // copy slack
-    // All the other values have been scaled except for the rowslacks.
-    // So try to scale them appropriately
-    for (y = 0; y < assign->height; y++) {
-      double old_slack = assign_rowslack(assign_prev, y);
-      assign_set_rowslack(assign, y, old_slack);
-      double sum = assign_rowsum(assign, y);
-      double old_sum = assign_rowsum(assign_prev, y);
-      double slack = old_slack;
-      if (abs(old_sum - old_slack) > 0.001)
-        slack = old_slack * (sum - old_slack) / (old_sum - old_slack);
-      // printf("scale slack: %f %f %f %f\n", old_sum, sum, old_slack, slack);
-      assign_set_rowslack(assign, y, min(slack, max_slack));
-    }
-
-    // printf("assign.5:\n"); assign_print(assign);
-
-    // save a copy of what colsum is before normalizing
-    for (x = 0; x < assign->width; x++) {
-      assign->data[_assign_extra(assign, x)] = assign_colsum(assign, x);
-    }
-    // normalize nonslack columns
-    for (y = 0; y < assign->height; y++) {
-      double inv_sum = 1.0 / assign_rowsum(assign, y);
-      // printf("objects_sum[y]: %f\n", objects_sum[y]);
-      // printf("inv_sum: %f\n", inv_sum);
-      for (x = 0; x < assign->width; x++) {
-        double val = assign_mult(assign, x, y, inv_sum);
-        assign_norm += pow(val - assign_get(assign_prev, x, y), 2.0);
-      }
-
-      double val = assign_rowslack(assign, y);
-      val *= inv_sum;
-      val = min(val, max_slack);
-      assign_set_rowslack(assign, y, val);
-      assign_norm += pow(val - assign_rowslack(assign_prev, y), 2.0);
-    }
-
-    // printf("assign.75:\n"); assign_print(assign);
-
-    // All the other values have been scaled except for the colslacks.
-    // So try to scale them appropriately
-    for (x = 0; x < assign->width; x++) {
-      double old_slack = assign_colslack(assign, x);
-      double sum = assign_colsum(assign, x);
-      double old_sum = assign->data[_assign_extra(assign, x)];
-      double slack = old_slack;
-      if (abs(old_sum - old_slack) > 0.001)
-        slack = old_slack * (sum - old_slack) / (old_sum - old_slack);
-      slack = min(slack, max_slack);
-      // printf("scale slack: %f %f %f %f\n", old_sum, sum, old_slack, slack);
-      assign_set_colslack(assign, x, slack);
-
-      assign_norm += pow(slack - assign_colslack(assign_prev, x), 2.0);
-    }
-
-    if (SPDEBUG_ASSIGN) printf("assign_norm: %f  sum: %f  sqsum: %f  slack_sum: %f\n", assign_norm, assign->assign_sum, assign->assignsq_sum, assign->slack_sum);
-    // printf("assign:\n"); assign_print(assign);
 
     // swap assign and assign_prev
     assign = assign_prev;
     assign_prev = assign == assign1? assign2 : assign1;
   } while (assign_norm > small && abs(last_assign_norm - assign_norm) > 0.001); // what is small here?
 
-  // printf("assign_prev:\n"); assign_print(assign);
-  // printf("assign:\n"); assign_print(assign_prev);
+  if (SPDEBUG_ASSIGN) {
+    // printf("assign_prev:\n"); assign_print(assign);
+    printf("assign:\n"); assign_print(assign_prev);
+  }
 
   return assign_prev;
 }
@@ -432,22 +514,30 @@ void softposit_init(
 
     // try a bunch of different random poses, see which one matches best
     for (size_t p = 0; p < 500; p++) {
+      double norm1, norm2;
       // there's no guarantee that these will be orthogonal
       // a better randomization that makes orthogonal vectors might help
-      randu(obj->pose1, cv::Scalar(-1.0), cv::Scalar(1.0));
-      randu(obj->pose2, cv::Scalar(-1.0), cv::Scalar(1.0));
+      do {
+        randu(obj->pose1, cv::Scalar(-1.0), cv::Scalar(1.0));
+        randu(obj->pose2, cv::Scalar(-1.0), cv::Scalar(1.0));
 
-      // try constraining the pose to be mostly upright?
-      obj->pose1[1] /= 1000.0;
-      obj->pose2[0] /= 10.0;
-      obj->pose2[1] /= 10.0;
+        // try constraining the pose to be mostly upright?
+        obj->pose1[1] /= 1000.0;
+        obj->pose2[0] /= 10.0;
+        obj->pose2[1] /= 10.0;
 
-      obj->pose1[3] = 0;
-      obj->pose2[3] = 0;
-      obj->pose1 *= xsize / cv::norm(obj->pose1);
-      obj->pose2 *= ysize / cv::norm(obj->pose2);
-      obj->pose1[3] = ((xmax + xmin) / 2.0 + 1.0);
-      obj->pose2[3] = ((ymax + ymin) / 2.0 + 1.0);
+        obj->pose1[3] = 0;
+        obj->pose2[3] = 0;
+        norm1 = cv::norm(obj->pose1);
+        norm2 = cv::norm(obj->pose2);
+        obj->pose1 *= xsize / norm1;
+        obj->pose2 *= ysize / norm2;
+        obj->pose1[3] = ((xmax + xmin) / 2.0 + 1.0);
+        obj->pose2[3] = ((ymax + ymin) / 2.0 + 1.0);
+      } while (isinf(norm1) || isnan(norm1) || isinf(norm2) || isnan(norm2));
+
+      // printf("norms %d %d %d %d\n", isinf(norm1), isnan(norm1), isinf(norm2), isnan(norm2));
+
       if (SPDEBUG_INIT) print_vec("init pose1", obj->pose1);
       if (SPDEBUG_INIT) print_vec("init pose2", obj->pose2);
 
@@ -461,15 +551,15 @@ void softposit_init(
       softposit_one(data, image_points, slack, 0.004);
       softposit_one(data, image_points, slack, 0.04);
       assign_mat *assign = softposit_one_setup(data, image_points, slack, 0.4);
-      // printf("random assign:  sum: %f  sqsum: %f  slacksum: %f\n", assign->assign_sum, assign->assignsq_sum, assign->slack_sum);
+      // printf("random assign:  sum: %f  sqsum: %f  slacksum: %f\n", assign->assign_sum, assign_sqsum(assign), assign->slack_sum);
 
       // using sqsum is an attempt to approximate how specific the assign matrix is.
       // values should be between 0 and 1 (TODO: they aren't always, why?), so squaring
       // the values should make values near 1 stay the same, while values closer to 0
       // go way closer to 0. A sqsum value near the number of image points is probably
       // the best goal. 
-      if (assign->assignsq_sum > best_sqsum) {
-        best_sqsum = assign->assignsq_sum;
+      if (assign_sqsum(assign) > best_sqsum) {
+        best_sqsum = assign_sqsum(assign);
         best_pose1 = obj->pose1;
         best_pose2 = obj->pose2;
       }
@@ -501,8 +591,15 @@ void softposit_squared_dists(
       // print_vec("point", v3_to_v4(obj->points[i], 1));
       double dot1 = obj->pose1.dot(v3_to_v4(obj->points[i], 1));
       double dot2 = obj->pose2.dot(v3_to_v4(obj->points[i], 1));
-      // printf("dot: %f %f\n", dot1, dot2);
-      if (isnan(dot1)) abort();
+      if (isnan(dot1)) {
+        print_vec("pose1", obj->pose1);
+        print_vec("pose2", obj->pose2);
+        printf("norms %f %f\n", cv::norm(obj->pose1), cv::norm(obj->pose2));
+        printf("%ld %ld ", i, k);
+        print_vec("point", v3_to_v4(obj->points[i], 1));
+        printf("dot: %f %f\n", dot1, dot2);
+        abort();
+      }
 
       // printf("distsq:");
       for (j = 0; j < image_points.size(); j++) {
