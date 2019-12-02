@@ -37,6 +37,7 @@ typedef struct {
 typedef struct {
 
   size_t num_object_points;
+  double beta_init;
   double beta_final;
   double beta_update; // must be > 1, multiplied to beta until beta_final
   double small;

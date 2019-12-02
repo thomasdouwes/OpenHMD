@@ -53,7 +53,6 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 	cv::Mat tvec = cv::Mat::zeros(3, 1, CV_64FC1);
 	cv::Mat R = cv::Mat::zeros(3, 3, CV_64FC1);
 
-
 	if (num_blobs < 4) {
 		printf("Not enough blobs: %d\n", num_blobs);
 		return false;
@@ -121,8 +120,9 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 	list_points2d_undistorted.resize(num_matched);
 
 	for (i = 0; i < num_blobs; i++) {
-		list_points2d_all[j].x = blobs[i].x;
-		list_points2d_all[j].y = blobs[i].y;
+		list_points2d_all[i].x = blobs[i].x;
+		list_points2d_all[i].y = blobs[i].y;
+		// printf("point2d %d: %d %d %d %d\n", i, blobs[i].x, blobs[i].y, blobs[i].width, blobs[i].height);
 	}
 	for (j = 0; j < num_led_pos; j++) {
 		list_points3d_all[j][0] = leds[j].pos.x;
@@ -136,6 +136,9 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 	cv::fisheye::undistortPoints(list_points2d, list_points2d_undistorted, fishK, fishDistCoeffs);
 	cv::fisheye::undistortPoints(list_points2d_all, list_points2d_all_undistorted, fishK, fishDistCoeffs);
 
+	// for (i = 0; i < num_blobs; i++) {
+	// 	printf("point2d_undistorted %d: %f %f\n", i, list_points2d_all_undistorted[i].x, list_points2d_all_undistorted[i].y);
+	// }
 	// printf("Setting up softposit...\n");
 
 	if (num_matched >= 4) {

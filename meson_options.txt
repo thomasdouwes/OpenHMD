@@ -4,11 +4,13 @@ option(
 	choices: [
 		'simple',
 		'opengl',
+		'softposit_test',
 		'',
 	],
 	value: [
 		'simple',
 		'opengl',
+		'softposit_test',
 	],
 )
 

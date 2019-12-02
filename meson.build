@@ -254,6 +254,27 @@ if _examples.contains('opengl')
 	)
 endif
 
+# SoftPOSIT test
+if _examples.contains('softposit_test')
+
+	spt_sources = [
+		'examples/softposit/softposit_test.cpp',
+		'./src/drv_oculus_rift/softposit.cpp',
+	]
+
+	executable(
+		'openhmd_softposit_test',
+		spt_sources,
+		include_directories: include_directories([
+			'./include',
+			'./src/drv_oculus_rift',
+			'examples/softposit'
+		]),
+		dependencies: [dep_opencv],
+		# install: true,
+	)
+endif
+
 
 #
 # Install and pkg-config export file

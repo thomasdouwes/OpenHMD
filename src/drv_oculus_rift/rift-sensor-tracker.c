@@ -318,20 +318,6 @@ rift_sensor_new (ohmd_context* ohmd_ctx, int id, const char *serial_no, libusb_d
 
   sensor_ctx = ohmd_alloc(ohmd_ctx, sizeof (rift_sensor_ctx));
 
-  /* Camera matrix taken from one of my sensors:
-   * f = [ 715.185 715.185 ], c = [ 658.333 469.870 ]
-   * k = [  0.069530 -0.019189  0.001986  0.000214 ]
-   */
-   double * const A = sensor_ctx->camera_matrix.m;
-   double * const k = sensor_ctx->dist_coeffs;
-
-   A[0] = 715.185; A[2] = 658.333;
-   A[4] = 715.185; A[5] = 469.870;
-   A[8] = 1.0;
-
-   k[0] = 0.069530; k[1] = -0.019189;
-   k[2] = 0.001986; k[3] = 0.000214;
-
   sensor_ctx->id = id;
   strcpy ((char *) sensor_ctx->serial_no, (char *) serial_no);
   sensor_ctx->tracker = tracker;
