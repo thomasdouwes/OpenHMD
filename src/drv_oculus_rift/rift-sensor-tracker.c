@@ -300,8 +300,9 @@ static void new_frame_cb(struct rift_sensor_uvc_stream *stream)
 		}
 
 		draw_blob_debug_stuff(sensor_ctx, stream);
+		draw_projected_leds(sensor_ctx, sensor_ctx->tracker->leds, stream);
 
-		ohmd_pw_video_stream_push (sensor_ctx->debug_vid, sensor_ctx->frame_sof_ts, stream->frame);
+		ohmd_pw_video_stream_push (sensor_ctx->debug_vid, sensor_ctx->frame_sof_ts, stream->debug_frame);
 	}
 	if (sensor_ctx->debug_metadata)
 		ohmd_pw_debug_stream_push (sensor_ctx->debug_metadata, sensor_ctx->frame_sof_ts, "{ debug: \"debug!\" }");

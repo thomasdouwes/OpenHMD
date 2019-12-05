@@ -146,8 +146,8 @@ draw_blob_debug_stuff(rift_sensor_ctx *sensor_ctx, struct rift_sensor_uvc_stream
       w = b->width;
       h = b->height;
       clamp_rect(&start_x, &start_y, &w, &h, width, height);
-      // src = in_frame->data[0] + start_x + in_stride * start_y;
-      // dest = out_frame->data[0] + 3 * start_x + out_stride * start_y;
+      src = stream->frame + start_x + in_stride * start_y;
+      dest = stream->debug_frame + 3 * start_x + out_stride * start_y;
     
       for (y = 0; y < h; y++) {
         for (x = 0; x < w; x++) {
@@ -170,77 +170,81 @@ draw_blob_debug_stuff(rift_sensor_ctx *sensor_ctx, struct rift_sensor_uvc_stream
 void
 draw_projected_leds(rift_sensor_ctx *sensor_ctx, rift_leds *leds, struct rift_sensor_uvc_stream * stream) {
 
-    // int x, y;
-    // uint8_t *src = in_frame->data[0];
-    // uint8_t *dest = out_frame->data[0];
-    int width = stream->width;
-    int height = stream->height;
-    // int in_stride = in_frame->info.stride[0];
-    int out_stride = stream->stride;
-    // uint8_t led_pattern_phase = sensor_ctx->led_pattern_phase;
+  // int x, y;
+  // uint8_t *src = stream->frame; //in_frame->data[0];
+  uint8_t *dest = stream->debug_frame; // out_frame->data[0];
+  int width = stream->width;
+  int height = stream->height;
+  // int in_stride = stream->stride;
+  int out_stride = stream->width*3; //out_frame->info.stride[0];
+  // uint8_t led_pattern_phase = sensor_ctx->led_pattern_phase;
 
   int i;
 
-      /* Project HMD LEDs into the image */
-      rift_project_points(leds->points, leds->num_points,
-          &sensor_ctx->camera_matrix, sensor_ctx->dist_coeffs,
-          &sensor_ctx->pose_orient, &sensor_ctx->pose_pos,
-          sensor_ctx->led_out_points);
+  if (!sensor_ctx->bwobs) {
+    return;
+  }
 
-      /* Check how many LEDs have matching blobs in this pose,
-       * if there's enough we have a good match */
-      int matched_visible_blobs = 0;
-      int visible_leds = 0;
-      for (i = 0; i < leds->num_points; i++) {
-        vec3f *p = sensor_ctx->led_out_points + i;
-        vec3f facing;
-        int x = round(p->x);
-        int y = round(p->y);
+  /* Project HMD LEDs into the image */
+  rift_project_points(leds->points, leds->num_points,
+      &sensor_ctx->camera_matrix, sensor_ctx->dist_coeffs,
+      &sensor_ctx->pose_orient, &sensor_ctx->pose_pos,
+      sensor_ctx->led_out_points);
 
-        oquatf_get_rotated(&sensor_ctx->pose_orient, &leds->points[i].dir, &facing);
+  /* Check how many LEDs have matching blobs in this pose,
+    * if there's enough we have a good match */
+  int matched_visible_blobs = 0;
+  int visible_leds = 0;
+  for (i = 0; i < leds->num_points; i++) {
+    vec3f *p = sensor_ctx->led_out_points + i;
+    vec3f facing;
+    int x = round(p->x);
+    int y = round(p->y);
 
-        if (facing.z < -0.5) {
-          /* Strongly Camera facing */
-          struct blob *b = blobwatch_find_blob_at(sensor_ctx->bw, x, y);
-          visible_leds++;
-          if (b != NULL) {
-            matched_visible_blobs++;
-          }
+    oquatf_get_rotated(&sensor_ctx->pose_orient, &leds->points[i].dir, &facing);
+
+    if (facing.z < -0.5) {
+      /* Strongly Camera facing */
+      struct blob *b = blobwatch_find_blob_at(sensor_ctx->bw, x, y);
+      visible_leds++;
+      if (b != NULL) {
+        matched_visible_blobs++;
+      }
+    }
+  }
+  printf("  vis: %d  matched: %d  blobs: %d\r", visible_leds, matched_visible_blobs, sensor_ctx->bwobs->num_led_blobs);
+  bool good_pose_match = false;
+  if (visible_leds > 4 && matched_visible_blobs > 4) {
+    if (sensor_ctx->bwobs->num_led_blobs < 2 * matched_visible_blobs) {
+      good_pose_match = true;
+      // g_print ("  Found good pose match - %u LEDs matched %u visible ones\r",
+      //     matched_visible_blobs, visible_leds);
+    }
+  }
+
+  for (i = 0; i < leds->num_points; i++) {
+    vec3f *p = sensor_ctx->led_out_points + i;
+    vec3f facing;
+    int x = round(p->x);
+    int y = round(p->y);
+
+    oquatf_get_rotated(&sensor_ctx->pose_orient, &leds->points[i].dir, &facing);
+
+    if (facing.z < 0) {
+      /* Camera facing */
+      if (good_pose_match) {
+        /* Back project LED ids into blobs if we find them and the dot product
+          * shows them pointing strongly to the camera */
+        struct blob *b = blobwatch_find_blob_at(sensor_ctx->bw, x, y);
+        if (b != NULL && facing.z < -0.5 && b->led_id != i) {
+          /* Found a blob! */
+          // g_print ("Marking LED %d at %d,%d\n", i, x, y);
+          b->led_id = i;
         }
       }
-      printf("  vis: %d  matched: %d  blobs: %d\r", visible_leds, matched_visible_blobs, sensor_ctx->bwobs->num_led_blobs);
-      bool good_pose_match = false;
-      if (visible_leds > 4 && matched_visible_blobs > 4) {
-        if (sensor_ctx->bwobs->num_led_blobs < 2 * matched_visible_blobs) {
-          good_pose_match = true;
-          // g_print ("  Found good pose match - %u LEDs matched %u visible ones\r",
-          //     matched_visible_blobs, visible_leds);
-        }
-      }
-
-      for (i = 0; i < leds->num_points; i++) {
-        vec3f *p = sensor_ctx->led_out_points + i;
-        vec3f facing;
-        int x = round(p->x);
-        int y = round(p->y);
-
-        oquatf_get_rotated(&sensor_ctx->pose_orient, &leds->points[i].dir, &facing);
-
-        if (facing.z < 0) {
-          /* Camera facing */
-          if (good_pose_match) {
-            /* Back project LED ids into blobs if we find them and the dot product
-             * shows them pointing strongly to the camera */
-            struct blob *b = blobwatch_find_blob_at(sensor_ctx->bw, x, y);
-            if (b != NULL && facing.z < -0.5 && b->led_id != i) {
-              /* Found a blob! */
-              // g_print ("Marking LED %d at %d,%d\n", i, x, y);
-              b->led_id = i;
-            }
-          }
-          // draw_rgb_marker (out_frame->data[0], width, out_stride, height, x, y, 8, 8, 0xFF0000);
-        } else {
-          // draw_rgb_marker (out_frame->data[0], width, out_stride, height, x, y, 8, 8, 0x202000);
-        }
-      }
+      draw_rgb_marker (dest, width, out_stride, height, x, y, 8, 8, 0xFF0000);
+    } else {
+      draw_rgb_marker (dest, width, out_stride, height, x, y, 8, 8, 0x202000);
+    }
+  }
 }

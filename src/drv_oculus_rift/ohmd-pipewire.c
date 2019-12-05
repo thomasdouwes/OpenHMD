@@ -107,7 +107,7 @@ on_video_stream_format_changed(void *_data, const struct spa_pod *format)
 	}
 	spa_format_video_raw_parse(format, &v->format, &gdata->types.format_video);
 
-	stride = v->width;
+	stride = v->width*3;
 	h = v->height;
 
 	params[0] = spa_pod_builder_object(&b,
