@@ -203,7 +203,20 @@ static int radio_write(libusb_device_handle *devhandle, const uint8_t *buf, size
 		data[126] -= buf[i]; /* calculate checksum */
 	}
 
-	ret = esp770u_spi_set_control(devhandle, 0x81, sizeof data);
+	do {
+		ret = esp770u_spi_set_control(devhandle, 0x81, sizeof data);
+		if (ret < 0) {
+			fprintf(stderr, "set_control 0x81 failed: %d\n", ret);
+			// do random stuff to see if it will work?
+			ret = esp770u_spi_set_control(devhandle, 0x41, sizeof data);
+			if (ret < 0) fprintf(stderr, "set_control 0x41 failed: %d\n", ret);
+			ret = esp770u_spi_get_data(devhandle, data, sizeof data);
+			if (ret < 0) fprintf(stderr, "get_data failed: %d\n", ret);
+			ret = esp770u_spi_set_data(devhandle, data, sizeof data);
+			if (ret < 0) fprintf(stderr, "set_data failed: %d\n", ret);
+			ret = -1; // try again
+		}
+	} while (ret < 0);
 	if (ret < 0) return ret;
 
 	/* send data */
@@ -258,6 +271,14 @@ static int radio_write(libusb_device_handle *devhandle, const uint8_t *buf, size
 int rift_sensor_esp770u_setup_radio(libusb_device_handle *devhandle, const uint8_t radio_id[5])
 {
 	int ret;
+
+	// usleep(50000);
+
+	// // init radio?
+	// const uint8_t ibuf1[2] = { 0x01, 0x01 };
+	// ret = radio_write(devhandle, ibuf1, sizeof ibuf1);
+	// if (ret < 0)
+	// 	return ret;
 
 	const uint8_t buf1[7] = { 0x40, 0x10, radio_id[0], radio_id[1],
 				radio_id[2], radio_id[3], radio_id[4] };
