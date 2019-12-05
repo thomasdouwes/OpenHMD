@@ -321,6 +321,7 @@ int rift_sensor_uvc_stream_setup (libusb_context *ctx, libusb_device_handle *dev
 	stream->frame = malloc(stream->frame_size);
 	if (!stream->frame)
 		return -ENOMEM;
+	stream->debug_frame = NULL;
 
 	num_packets = (stream->frame_size + packet_size - 1) / packet_size;
 	stream->num_transfers = (num_packets + 31) / 32;

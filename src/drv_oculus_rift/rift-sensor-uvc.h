@@ -11,6 +11,7 @@ struct rift_sensor_uvc_stream {
 	int width;
 	int height;
 	unsigned char *frame;
+	unsigned char *debug_frame;
 	int frame_size;
 	int payload_size;
 	int frame_id;

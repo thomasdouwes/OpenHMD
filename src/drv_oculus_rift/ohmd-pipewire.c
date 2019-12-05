@@ -257,7 +257,7 @@ ohmd_pw_video_stream_new (const char *stream_id, int w, int h, int fps_n, int fp
 			gdata->type_map->param.idEnumFormat, gdata->type_map->spa_format,
 			"I", gdata->types.media_type.video,
 			"I", gdata->types.media_subtype.raw,
-			":", gdata->types.format_video.format,    "I", gdata->types.video_format.GRAY8, /* FIXME: Support other colorspace? */
+			":", gdata->types.format_video.format,    "I", gdata->types.video_format.RGB, /* FIXME: Support other colorspace? */
 			":", gdata->types.format_video.size,      "R", &SPA_RECTANGLE(ret->width, ret->height),
 			":", gdata->types.format_video.framerate, "F", &SPA_FRACTION(ret->fps_n, ret->fps_d));
 
@@ -344,7 +344,7 @@ done:
 void ohmd_pw_video_stream_push (ohmd_pw_video_stream *v, int64_t pts, const uint8_t *pixels)
 {
 	/* FIXME: Other frame formats */
-	ohmd_pw_stream_push_common((ohmd_pw_base_stream *) v, pts, pixels, v->width * v->height);
+	ohmd_pw_stream_push_common((ohmd_pw_base_stream *) v, pts, pixels, v->width * v->height * 3);
 }
 
 static void

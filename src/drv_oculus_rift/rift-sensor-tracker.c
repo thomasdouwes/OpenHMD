@@ -299,6 +299,8 @@ static void new_frame_cb(struct rift_sensor_uvc_stream *stream)
 				}
 		}
 
+		draw_blob_debug_stuff(sensor_ctx, stream);
+
 		ohmd_pw_video_stream_push (sensor_ctx->debug_vid, sensor_ctx->frame_sof_ts, stream->frame);
 	}
 	if (sensor_ctx->debug_metadata)
@@ -428,6 +430,41 @@ rift_sensor_tracker_new (ohmd_context* ohmd_ctx,
 
 	ret = libusb_init(&tracker_ctx->usb_ctx);
 	ASSERT_MSG(ret >= 0, fail, "could not initialize libusb\n");
+
+
+	// reset devices first to fix issues
+	ret = libusb_get_device_list(tracker_ctx->usb_ctx, &devs);
+	ASSERT_MSG(ret >= 0, fail, "Could not get USB device list\n");
+
+	for (i = 0; devs[i]; ++i) {
+		struct libusb_device_descriptor desc;
+		libusb_device_handle *usb_devh;
+		rift_sensor_ctx *sensor_ctx = NULL;
+		unsigned char serial[33];
+
+		ret = libusb_get_device_descriptor(devs[i], &desc);
+		if (ret < 0)
+			continue; /* Can't access this device */
+		if (desc.idVendor != 0x2833 || desc.idProduct != CV1_PID)
+			continue;
+		ret = libusb_open(devs[i], &usb_devh);
+		if (ret) {
+			fprintf (stderr, "Failed to open Rift Sensor device. Check permissions\n");
+			continue;
+		}
+
+		ret = libusb_reset_device(usb_devh);
+		if (ret) {
+			fprintf (stderr, "Failed to reset Rift Sensor device. Check permissions\n");
+			continue;
+		}
+		printf("device reset\n");
+
+		libusb_close(usb_devh);
+	}
+	libusb_free_device_list(devs, 1);
+
+
 
 	ret = libusb_get_device_list(tracker_ctx->usb_ctx, &devs);
 	ASSERT_MSG(ret >= 0, fail, "Could not get USB device list\n");

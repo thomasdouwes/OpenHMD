@@ -129,7 +129,6 @@ int main(int argc, char** argv)
 
 	int auto_update = 1;
 	ohmd_device_settings_seti(settings, OHMD_IDS_AUTOMATIC_UPDATE, &auto_update);
-	printf("asdf\n");
 	ohmd_device* hmd = ohmd_list_open_device_s(ctx, 0, settings);
 	if(!hmd){
 		printf("failed to open device: %s\n", ohmd_ctx_get_error(ctx));

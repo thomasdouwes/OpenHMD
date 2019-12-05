@@ -2,6 +2,18 @@
 #include "rift-sensor-tracker.h"
 #include "rift-sensor-opencv.h"
 
+#define WRITE_UINT24_BE(dest, colour) dest[0] = colour & 0xff; dest[1] = colour >> 8 & 0xff; dest[2] = colour >> 16 & 0xff
+
+ #define MAX(a,b) \
+   ({ __typeof__ (a) _a = (a); \
+       __typeof__ (b) _b = (b); \
+     _a > _b ? _a : _b; })
+ #define MIN(a,b) \
+   ({ __typeof__ (a) _a = (a); \
+       __typeof__ (b) _b = (b); \
+     _a < _b ? _a : _b; })
+
+
 void
 draw_rgb_marker (uint8_t *pixels, int width, int stride, int height,
     int x_pos, int y_pos, int mark_width, int mark_height, uint32_t colour)
@@ -20,14 +32,14 @@ draw_rgb_marker (uint8_t *pixels, int width, int stride, int height,
   /* Horizontal line */
   uint8_t *dest = pixels + stride * y_pos + 3 * min_x;
   for (x = 0; x < max_x - min_x; x++) {
-     GST_WRITE_UINT24_BE (dest, colour);
+     WRITE_UINT24_BE (dest, colour);
      dest += 3;
   }
 
   /* Vertical line */
   dest = pixels + stride * min_y + 3 * x_pos;
   for (y = 0; y < max_y-min_y; y++) {
-     GST_WRITE_UINT24_BE (dest, colour);
+     WRITE_UINT24_BE (dest, colour);
      dest += stride;
   }
 }
@@ -56,21 +68,21 @@ draw_rgb_rect (uint8_t *pixels, int width, int stride, int height,
   int x, y;
   uint8_t *dest = pixels + stride * start_y + 3 * start_x;
   for (x = 0; x < box_width; x++) {
-     GST_WRITE_UINT24_BE (dest, colour);
+     WRITE_UINT24_BE (dest, colour);
      dest += 3;
   }
 
   for (y = 1; y < box_height-1; y++) {
      dest = pixels + stride * (start_y+y) + 3 * start_x;
 
-     GST_WRITE_UINT24_BE (dest, colour);
+     WRITE_UINT24_BE (dest, colour);
      dest += 3 * (box_width-1);
-     GST_WRITE_UINT24_BE (dest, colour);
+     WRITE_UINT24_BE (dest, colour);
   }
 
   dest = pixels + stride * (start_y+box_height-1) + 3 * start_x;
   for (x = 0; x < box_width; x++) {
-     GST_WRITE_UINT24_BE (dest, colour);
+     WRITE_UINT24_BE (dest, colour);
      dest += 3;
   }
 }
@@ -78,13 +90,16 @@ draw_rgb_rect (uint8_t *pixels, int width, int stride, int height,
 void
 draw_blob_debug_stuff(rift_sensor_ctx *sensor_ctx, struct rift_sensor_uvc_stream * stream) {
 
+    if (stream->debug_frame == NULL)
+      stream->debug_frame = calloc(stream->width * stream->height * 3, sizeof(unsigned char));
+
     int x, y;
-    uint8_t *src = NULL; //in_frame->data[0];
-    uint8_t *dest = NULL; // out_frame->data[0];
+    uint8_t *src = stream->frame; //in_frame->data[0];
+    uint8_t *dest = stream->debug_frame; // out_frame->data[0];
     int width = stream->width;
     int height = stream->height;
     int in_stride = stream->stride;
-    int out_stride = 1; //out_frame->info.stride[0];
+    int out_stride = stream->width*3; //out_frame->info.stride[0];
     // uint8_t led_pattern_phase = sensor_ctx->led_pattern_phase;
 
   for (y = 0; y < height; y++) {
