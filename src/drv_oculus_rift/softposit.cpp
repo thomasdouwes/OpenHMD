@@ -5,14 +5,14 @@
 using namespace std;
 
 #define SPDEBUG_ALL 1
-#define SPDEBUG_INIT (SPDEBUG_ALL * 0)
-#define SPDEBUG_DISTSQ (SPDEBUG_ALL * 0)
-#define SPDEBUG_L (SPDEBUG_ALL * 0)
-#define SPDEBUG_ASSIGN (SPDEBUG_ALL * 0)
-#define SPDEBUG_ROTTRANS (SPDEBUG_ALL * 0)
-#define SPDEBUG_LOOP (SPDEBUG_ALL * 0)
-#define SPDEBUG_KBWAIT (SPDEBUG_ALL * 0)
-#define SPDEBUG_DONE (SPDEBUG_ALL * 1)
+#define SPDEBUG_INIT (SPDEBUG_ALL && 0)
+#define SPDEBUG_DISTSQ (SPDEBUG_ALL && 0)
+#define SPDEBUG_L (SPDEBUG_ALL && 0)
+#define SPDEBUG_ASSIGN (SPDEBUG_ALL && 0)
+#define SPDEBUG_ROTTRANS (SPDEBUG_ALL && 0)
+#define SPDEBUG_LOOP (SPDEBUG_ALL && 0)
+#define SPDEBUG_KBWAIT (SPDEBUG_ALL && 0)
+#define SPDEBUG_DONE (SPDEBUG_ALL && 1)
 
 Object* softposit_new_object(std::vector<cv::Vec3d> points) {
   Object* obj = new Object; //(Object*)calloc(1, sizeof(Object));
@@ -215,7 +215,6 @@ double assign_sqsum(assign_mat *assign) {
 }
 
 void assign_print(assign_mat *mat) {
-  printf("sum: %f  sqsum: %f  slack_sum: %f\n", mat->assign_sum, assign_sqsum(mat), mat->slack_sum);
   for (size_t y = 0; y < mat->height; y++) {
     for (size_t x = 0; x < mat->width; x++) {
       printf("%.2f ", assign_get(mat, x, y));
@@ -229,6 +228,7 @@ void assign_print(assign_mat *mat) {
   for (size_t x = 0; x < mat->width; x++) {
     printf("%.2f ", assign_colsum(mat, x));
   }
+  printf("sqsum: %f\n", assign_sqsum(mat));
   printf("\n");
 }
 
@@ -596,7 +596,9 @@ void softposit_one(
   softposit_data *data,
   const std::vector<cv::Point2f> &image_points,
   double slack,
-  double beta
+  double beta,
+  double imgsize,
+  double objsize
 );
 double softposit_squared_dists(
   softposit_data *data,
@@ -960,6 +962,8 @@ cv::Vec3d make_orthogonal_v3(cv::Vec3d &a, cv::Vec3d &b, bool unitlen) {
     a = r1 * a.dot(r1);
     b = r2 * b.dot(r2);
   }
+
+  return r3;
 }
 
 // makes the vec3 components orthogonal without changing the 4th
