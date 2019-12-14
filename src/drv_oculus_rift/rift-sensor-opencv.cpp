@@ -102,7 +102,7 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 		list_points2d[j].y = blobs[i].y;
 		j++;
 
-		LOGD ("LED %d at %d,%d (3D %f %f %f)\n",
+		printf ("LED %d at %d,%d (3D %f %f %f)\n",
 		    blobs[i].led_id, blobs[i].x, blobs[i].y,
 		    leds[blobs[i].led_id].pos.x,
 		    leds[blobs[i].led_id].pos.y,
@@ -141,23 +141,38 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 	// }
 	// printf("Setting up softposit...\n");
 
-	if (num_matched >= 4) {
-		cv::solvePnPRansac(list_points3d, list_points2d_undistorted, dummyK, dummyD, rvec, tvec,
+  cv::solvePnPRansac(list_points3d, list_points2d_undistorted, dummyK, dummyD, rvec, tvec,
 					use_extrinsic_guess, iterationsCount, reprojectionError,
 					confidence, inliers, flags);
-	}
 
+	printf("PnPRansac rot: %f %f %f\n", rvec.at<double>(0), rvec.at<double>(1), rvec.at<double>(2));
+	printf("PnPRansac trans: %f %f %f\n", tvec.at<double>(0), tvec.at<double>(1), tvec.at<double>(2));
+
+	vec3f v;
+	double angle = sqrt(rvec.dot(rvec));
+	double inorm = 1.0f / angle;
+
+	v.x = rvec.at<double>(0) * inorm;
+	v.y = rvec.at<double>(1) * inorm;
+	v.z = rvec.at<double>(2) * inorm;
+	oquatf_init_axis (rot, &v, angle);
+
+	for (i = 0; i < 3; i++)
+		trans->arr[i] = tvec.at<double>(i);
+
+  float rot_mat[4][4];
+  oquatf_get_mat4x4(rot, trans, rot_mat);
+	printf("PnPRansac rot: %f %f %f\n", rot_mat[0][0], rot_mat[0][1], rot_mat[0][2]);
+	printf("               %f %f %f\n", rot_mat[1][0], rot_mat[1][1], rot_mat[1][2]);
+	printf("               %f %f %f\n", rot_mat[2][0], rot_mat[2][1], rot_mat[2][2]);
+
+	/* SoftPOSIT matching */
 	Object *obj = softposit_new_object(list_points3d_all);
 				 
 	softposit_data *sp = softposit_new();
 	softposit_add_object(sp, obj);
 
 	softposit(sp, list_points2d_all_undistorted);
-
-	if (num_matched >= 4) {
-		printf("PnPRansac rot: %f %f %f\n", rvec.at<double>(0), rvec.at<double>(1), rvec.at<double>(2));
-		printf("PnPRansac trans: %f %f %f\n", tvec.at<double>(0), tvec.at<double>(1), tvec.at<double>(2));
-	}
 
 	cv::Rodrigues(obj->rotation, rvec);
 	printf("softposit rot: %f %f %f\n", rvec.at<double>(0), rvec.at<double>(1), rvec.at<double>(2));
@@ -172,19 +187,6 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 	softposit_free(sp);
 
 	// abort();
-
-	vec3f v;
-	double angle = sqrt(rvec.dot(rvec));
-	double inorm = 1.0f / angle;
-
-	v.x = rvec.at<double>(0) * inorm;
-	v.y = rvec.at<double>(1) * inorm;
-	v.z = rvec.at<double>(2) * inorm;
-	oquatf_init_axis (rot, &v, angle);
-
-	for (i = 0; i < 3; i++)
-		trans->arr[i] = tvec.at<double>(i);
-
 
 	// LOGV ("Got PnP pose quat %f %f %f %f  pos %f %f %f  leds %u",
 	//      rot->x, rot->y, rot->z, rot->w,
