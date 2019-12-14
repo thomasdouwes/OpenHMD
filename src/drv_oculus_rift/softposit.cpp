@@ -561,7 +561,8 @@ softposit_data* softposit_new() {
   data->beta_update = 10; //1.05;
   data->small = 0.00000001;
   data->focal_length = 1.0; // ?
-  data->alpha = 0; //0.0001; // TODO: This is often computed based on noise in the image.
+  //data->alpha = 0; //0.0001; // TODO: This is often computed based on noise in the image.
+  data->alpha = 9.21/715.0; // Approximately 1 pixel error, with 0.99 probability?
   data->num_object_points = 0;
 
   data->assign1 = assign_mat_new(0, 0);
@@ -637,7 +638,7 @@ void softposit_init(
 
   cv::Vec4d best_pose1;
   cv::Vec4d best_pose2;
-  double best_sqsum = 0;
+  double best_sqsum = 2000000000000.0;
 
   // initialize correction
   for (k = 0; k < data->num_object_points; k++) {
@@ -691,7 +692,7 @@ void softposit_init(
     cv::Vec4d pose1, pose2;
 
     // try a bunch of different random poses, see which one matches best
-    for (size_t p = 0; p < 1; p++) {
+    for (size_t p = 0; p < 100; p++) {
       // there's no guarantee that these will be orthogonal
       // a better randomization that makes orthogonal vectors might help
       do {
@@ -707,6 +708,7 @@ void softposit_init(
         pose2[1] = abs(pose2[1]);
         pose2[2] /= 100.0;
 
+#if 0
         //hack: set to known values for test
         pose1[0] = 0.0;
         pose1[1] = 1.0;
@@ -714,6 +716,7 @@ void softposit_init(
         pose2[0] = 0.0;
         pose2[1] = 1.0;
         pose2[2] = 0.0;
+#endif
 
         pose1[3] = 0;
         pose2[3] = 0;
@@ -742,6 +745,9 @@ void softposit_init(
         data->correction[k] = 1;
       }
 
+      // Clear the assignment matrices
+      assign_set_all_slack(&data->assign1, slack);
+      assign_set_all_slack(&data->assign2, slack);
 
       double avgdistsq = softposit_squared_dists(data, image_points, slack, 1);
       // initial beta should make the exp(-beta*distsq) for average distsq the same as slack
@@ -754,6 +760,16 @@ void softposit_init(
         printf("beta_init: %f   final: %f\n", data->beta_init, data->beta_final);
       }
       
+      // deterministic annealing loop
+      double beta = data->beta_init; //0.0004; // anealing amount? TODO: Better name
+      double beta_final = data->beta_final;
+      while (beta < beta_final) {
+        if (SPDEBUG_LOOP) printf("\n\nsoftposit loop start beta: %f\n", beta);
+        softposit_one(data, image_points, slack, beta, *imgsize, *objsize);
+        beta *= data->beta_update;
+        // break;
+      }
+
       // run a few iterations of the loop just for fun
       // softposit_one(data, image_points, slack, 0.0004);
       // softposit_one(data, image_points, slack, 0.004);
@@ -766,11 +782,12 @@ void softposit_init(
       // the values should make values near 1 stay the same, while values closer to 0
       // go way closer to 0. A sqsum value near the number of image points is probably
       // the best goal. 
-      // if (assign_sqsum(assign) > best_sqsum) {
-        // best_sqsum = assign_sqsum(assign);
+      avgdistsq = softposit_squared_dists(data, image_points, slack, 1);
+      if (avgdistsq < best_sqsum) {
+        best_sqsum = avgdistsq;
         best_pose1 = pose1;
         best_pose2 = pose2;
-      // }
+      }
     }
 
     // printf("best_sqsum: %f\n", best_sqsum);
@@ -1065,7 +1082,7 @@ assign_mat *softposit_one_setup(
   double beta
 ) {
     // is this a good idea?
-    assign_set_all_slack(&data->assign1, slack /*min(slack, beta * 2)*/);
+    //assign_set_all_slack(&data->assign1, slack /*min(slack, beta * 2)*/);
 
     double avgdistsq = softposit_squared_dists(data, image_points, slack, beta);
     if (SPDEBUG_LOOP) printf("avgdistsq: %f\n", avgdistsq);
@@ -1146,7 +1163,7 @@ void softposit(
 
   softposit_init(data, image_points, slack, &imgsize, &objsize);
 
-
+#if 0
   // printf("softposit init\n");
   // initialize slack elements of assign
   assign_set_all_slack(&data->assign1, slack);
@@ -1182,6 +1199,7 @@ void softposit(
   }
 
   free(line);
+#endif
 
   if (SPDEBUG_DONE) {
     printf("softposit done\n");
