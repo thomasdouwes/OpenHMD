@@ -253,6 +253,7 @@ static int radio_write(libusb_device_handle *devhandle, const uint8_t *buf, size
 		for (i = 0; i < 127; i++)
 			printf("%02x ", data[i]);
 		printf("\n");
+		return -1;
 	}
 
 	uint8_t chksum = 0;
@@ -263,6 +264,7 @@ static int radio_write(libusb_device_handle *devhandle, const uint8_t *buf, size
 		for (i = 0; i < 127; i++)
 			printf("%02x ", data[i]);
 		printf("\n");
+		return -1;
 	}
 
 	return 0;
