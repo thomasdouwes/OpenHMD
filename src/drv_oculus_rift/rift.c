@@ -679,7 +679,7 @@ static int rift_get_led_info(rift_hmd_t *priv)
 			priv->imu.pos.x = (float)pos.pos_x;
 			priv->imu.pos.y = (float)pos.pos_y;
 			priv->imu.pos.z = (float)pos.pos_z;
-			LOGV ("IMU index %d pos x/y/x %d/%d/%d\n", pos.index, pos.pos_x, pos.pos_y, pos.pos_z);
+			LOGV ("IMU index %d pos x/y/z %d/%d/%d\n", pos.index, pos.pos_x, pos.pos_y, pos.pos_z);
 		} else if (pos.flags == 2) {
 			rift_led *led = &priv->leds.points[pos.index];
 			led->pos.x = (float)pos.pos_x;
@@ -692,7 +692,7 @@ static int rift_get_led_info(rift_hmd_t *priv)
 			ovec3f_normalize_me(&led->dir);
 			if (pos.index >= num_leds)
 				num_leds = pos.index + 1;
-			LOGV ("LED index %d pos x/y/x %d/%d/%d\n", pos.index, pos.pos_x, pos.pos_y, pos.pos_z);
+			LOGV ("LED index %d pos x/y/z %d/%d/%d\n", pos.index, pos.pos_x, pos.pos_y, pos.pos_z);
 		}
 	}
 	priv->leds.num_points = num_leds;
