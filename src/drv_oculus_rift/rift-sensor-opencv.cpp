@@ -65,6 +65,7 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 	cv::Rodrigues(R, rvec);
 
 	//cout << "R = " << R << ", rvec = " << rvec << endl;
+	//cout << "fishK = " << fishK << " dist " << fishDistCoeffs << endl;
 
 	/* count identified leds */
 	for (i = 0; i < num_blobs; i++) {
@@ -83,10 +84,6 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 	std::vector<cv::Vec3d> list_points3d(num_leds);
 	std::vector<cv::Point2f> list_points2d(num_leds);
 	std::vector<cv::Point2f> list_points2d_undistorted(num_leds);
-
-	std::vector<cv::Vec3d> list_points3d_all(num_led_pos);
-	std::vector<cv::Point2f> list_points2d_all(num_blobs);
-	std::vector<cv::Point2f> list_points2d_all_undistorted(num_blobs);
 
 	taken = 0;
 	for (i = 0, j = 0; i < num_blobs && j < num_leds; i++) {
@@ -110,19 +107,57 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 	}
 
 	num_matched = j;
-	if (num_matched < 4) {
-		// printf("Not enough leds: %d\n", num_matched);
-		return false;
+	if (num_matched >= 4) {
+			list_points3d.resize(num_matched);
+			list_points2d.resize(num_matched);
+			list_points2d_undistorted.resize(num_matched);
+		
+			// we have distortion params for the openCV fisheye model
+			// so we undistort the image points manually before passing them to the PnpRansac solver
+			// and we give the solver identity camera + null distortion matrices
+			cv::fisheye::undistortPoints(list_points2d, list_points2d_undistorted, fishK, fishDistCoeffs);
+		
+			// for (i = 0; i < num_blobs; i++) {
+			// 	printf("point2d_undistorted %d: %f %f\n", i, list_points2d_all_undistorted[i].x, list_points2d_all_undistorted[i].y);
+			// }
+			// printf("Setting up softposit...\n");
+		
+		  cv::solvePnPRansac(list_points3d, list_points2d_undistorted, dummyK, dummyD, rvec, tvec,
+							use_extrinsic_guess, iterationsCount, reprojectionError,
+							confidence, inliers, flags);
+		
+			printf("PnPRansac rot: %f %f %f\n", rvec.at<double>(0), rvec.at<double>(1), rvec.at<double>(2));
+			printf("PnPRansac trans: %f %f %f\n", tvec.at<double>(0), tvec.at<double>(1), tvec.at<double>(2));
+		
+			vec3f v;
+			double angle = sqrt(rvec.dot(rvec));
+			double inorm = 1.0f / angle;
+		
+			v.x = rvec.at<double>(0) * inorm;
+			v.y = rvec.at<double>(1) * inorm;
+			v.z = rvec.at<double>(2) * inorm;
+			oquatf_init_axis (rot, &v, angle);
+		
+			for (i = 0; i < 3; i++)
+				trans->arr[i] = tvec.at<double>(i);
+		
+		  float rot_mat[4][4];
+		  oquatf_get_mat4x4(rot, trans, rot_mat);
+			printf("PnPRansac rot: %f %f %f\n", rot_mat[0][0], rot_mat[0][1], rot_mat[0][2]);
+			printf("               %f %f %f\n", rot_mat[1][0], rot_mat[1][1], rot_mat[1][2]);
+			printf("               %f %f %f\n", rot_mat[2][0], rot_mat[2][1], rot_mat[2][2]);
 	}
-	// num_matched = 4; // HACK to simplify softposit debug
-	list_points3d.resize(num_matched);
-	list_points2d.resize(num_matched);
-	list_points2d_undistorted.resize(num_matched);
+
+  if (num_blobs >= 4) {
+	/* SoftPOSIT matching */
+	std::vector<cv::Vec3d> list_points3d_all(num_led_pos);
+	std::vector<cv::Point2f> list_points2d_all(num_blobs);
+	std::vector<cv::Point2f> list_points2d_all_undistorted; // (num_blobs);
 
 	for (i = 0; i < num_blobs; i++) {
 		list_points2d_all[i].x = blobs[i].x;
 		list_points2d_all[i].y = blobs[i].y;
-		// printf("point2d %d: %d %d %d %d\n", i, blobs[i].x, blobs[i].y, blobs[i].width, blobs[i].height);
+		//printf("point2d %d: %d %d %d %d\n", i, blobs[i].x, blobs[i].y, blobs[i].width, blobs[i].height);
 	}
 	for (j = 0; j < num_led_pos; j++) {
 		list_points3d_all[j][0] = leds[j].pos.x;
@@ -130,43 +165,8 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 		list_points3d_all[j][2] = leds[j].pos.z;
 	}
 
-	// we have distortion params for the openCV fisheye model
-	// so we undistort the image points manually before passing them to the PnpRansac solver
-	// and we give the solver identity camera + null distortion matrices
-	cv::fisheye::undistortPoints(list_points2d, list_points2d_undistorted, fishK, fishDistCoeffs);
 	cv::fisheye::undistortPoints(list_points2d_all, list_points2d_all_undistorted, fishK, fishDistCoeffs);
 
-	// for (i = 0; i < num_blobs; i++) {
-	// 	printf("point2d_undistorted %d: %f %f\n", i, list_points2d_all_undistorted[i].x, list_points2d_all_undistorted[i].y);
-	// }
-	// printf("Setting up softposit...\n");
-
-  cv::solvePnPRansac(list_points3d, list_points2d_undistorted, dummyK, dummyD, rvec, tvec,
-					use_extrinsic_guess, iterationsCount, reprojectionError,
-					confidence, inliers, flags);
-
-	printf("PnPRansac rot: %f %f %f\n", rvec.at<double>(0), rvec.at<double>(1), rvec.at<double>(2));
-	printf("PnPRansac trans: %f %f %f\n", tvec.at<double>(0), tvec.at<double>(1), tvec.at<double>(2));
-
-	vec3f v;
-	double angle = sqrt(rvec.dot(rvec));
-	double inorm = 1.0f / angle;
-
-	v.x = rvec.at<double>(0) * inorm;
-	v.y = rvec.at<double>(1) * inorm;
-	v.z = rvec.at<double>(2) * inorm;
-	oquatf_init_axis (rot, &v, angle);
-
-	for (i = 0; i < 3; i++)
-		trans->arr[i] = tvec.at<double>(i);
-
-  float rot_mat[4][4];
-  oquatf_get_mat4x4(rot, trans, rot_mat);
-	printf("PnPRansac rot: %f %f %f\n", rot_mat[0][0], rot_mat[0][1], rot_mat[0][2]);
-	printf("               %f %f %f\n", rot_mat[1][0], rot_mat[1][1], rot_mat[1][2]);
-	printf("               %f %f %f\n", rot_mat[2][0], rot_mat[2][1], rot_mat[2][2]);
-
-	/* SoftPOSIT matching */
 	Object *obj = softposit_new_object(list_points3d_all);
 				 
 	softposit_data *sp = softposit_new();
@@ -185,6 +185,7 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 
 	softposit_free_object(obj);
 	softposit_free(sp);
+  }
 
 	// abort();
 
@@ -192,7 +193,7 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 	//      rot->x, rot->y, rot->z, rot->w,
 	//      trans->x, trans->y, trans->z,
 	// 	 num_leds);
-	return true;
+	return (num_matched >= 4);
 }
 
 void rift_project_points(rift_led *leds, int num_led_pos,
