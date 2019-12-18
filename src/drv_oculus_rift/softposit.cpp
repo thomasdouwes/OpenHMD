@@ -5,12 +5,13 @@
 using namespace std;
 
 #define SPDEBUG_ALL 1
-#define SPDEBUG_INIT (SPDEBUG_ALL && 0)
-#define SPDEBUG_DISTSQ (SPDEBUG_ALL && 0)
-#define SPDEBUG_L (SPDEBUG_ALL && 0)
-#define SPDEBUG_ASSIGN (SPDEBUG_ALL && 0)
+#define SPDEBUG_INIT (SPDEBUG_ALL && 1)
+#define SPDEBUG_DISTSQ (SPDEBUG_ALL && 1)
+#define SPDEBUG_DISTSQ_V (SPDEBUG_ALL && 0)
+#define SPDEBUG_L (SPDEBUG_ALL && 1)
+#define SPDEBUG_ASSIGN (SPDEBUG_ALL && 1)
 #define SPDEBUG_ROTTRANS (SPDEBUG_ALL && 0)
-#define SPDEBUG_LOOP (SPDEBUG_ALL && 0)
+#define SPDEBUG_LOOP (SPDEBUG_ALL && 1)
 #define SPDEBUG_KBWAIT (SPDEBUG_ALL && 0)
 #define SPDEBUG_DONE (SPDEBUG_ALL && 1)
 
@@ -217,9 +218,9 @@ double assign_sqsum(assign_mat *assign) {
 void assign_print(assign_mat *mat) {
   for (size_t y = 0; y < mat->height; y++) {
     for (size_t x = 0; x < mat->width; x++) {
-      printf("%.2f ", assign_get(mat, x, y));
+      printf("%.5f ", assign_get(mat, x, y));
     }
-    printf("%.2f %.2f\n", assign_rowslack(mat, y), assign_rowsum(mat, y));
+    printf("%.5f %.2f\n", assign_rowslack(mat, y), assign_rowsum(mat, y));
   }
   for (size_t x = 0; x < mat->width; x++) {
     printf("%.2f ", assign_colslack(mat, x));
@@ -361,6 +362,7 @@ assign_mat *assign_normalize(assign_mat *assign2, assign_mat *assign1, double sm
   double assign_norm = 0, last_assign_norm = 0;
   assign_mat *assign = assign2;
   assign_mat *assign_prev = assign1;
+  int iters = 0;
   do {
     last_assign_norm = assign_norm;
     assign_norm = 0;
@@ -395,7 +397,8 @@ assign_mat *assign_normalize(assign_mat *assign2, assign_mat *assign1, double sm
     assign = assign_prev;
     assign_prev = assign == assign1? assign2 : assign1;
     // abort();
-  } while (assign_norm > small && abs(last_assign_norm - assign_norm) > 0.0000001); // what is small here?
+    iters++;
+  } while (iters < 50 || (assign_norm > small && abs(last_assign_norm - assign_norm) > 0.0000001)); // what is small here?
 
   // swap back
   assign = assign_prev;
@@ -404,7 +407,7 @@ assign_mat *assign_normalize(assign_mat *assign2, assign_mat *assign1, double sm
   if (SPDEBUG_ASSIGN) {
     printf("assign_norm: %f  sum: %f  sqsum: %f  slack_sum: %f\n", assign_norm, assign->assign_sum, assign_sqsum(assign), assign->slack_sum);
     // printf("assign_prev:\n"); assign_print(assign);
-    printf("assign done:\n"); assign_print(assign);
+    printf("assign done after %d iterations:\n", iters); assign_print(assign);
   }
 
   return assign_prev;
@@ -557,12 +560,12 @@ softposit_data* softposit_new() {
   data->correction = std::vector<double>(0);
 
   // most of these will be set to something else in softposit_init
-  data->beta_final = 0.5;
-  data->beta_update = 10; //1.05;
-  data->small = 0.00000001;
+  data->beta_final = 0.85;
+  data->beta_update = 1.05;
+  data->small = 0.00001;
   data->focal_length = 1.0; // ?
   //data->alpha = 0; //0.0001; // TODO: This is often computed based on noise in the image.
-  data->alpha = 9.21/715.0; // Approximately 1 pixel error, with 0.99 probability?
+  data->alpha = 5.0 * pow (9.21/715.0, 2.0); // Approximately 5 pixel error, with 0.99 probability?
   data->num_object_points = 0;
 
   data->assign1 = assign_mat_new(0, 0);
@@ -657,13 +660,14 @@ void softposit_init(
       *objsize = max(len, *objsize);
     }
 
-    double dist = *imgsize / *objsize;
+    double dist = *objsize / *imgsize;
     if (SPDEBUG_INIT) {
       printf("x: min: %f  max: %f\n", xmin, xmax);
       printf("y: min: %f  max: %f\n", ymin, ymax);
       printf("imgsize: %f\n", *imgsize);
       printf("obj %ld objsize: %f\n", o, *objsize);
       printf("dist: %f\n", dist);
+      printf("data->alpha: %f\n", data->alpha);
     }
 
 
@@ -685,7 +689,7 @@ void softposit_init(
       avgimgdistsq += best_idistsq;
     }
     avgimgdistsq /= (double)image_points.size();
-    data->beta_final = -log(slack) / avgimgdistsq * 2;
+    //data->beta_final = -log(slack) / avgimgdistsq * 2;
 
     // TODO: Calculate pose vectors from initial rot/trans
 
@@ -703,12 +707,12 @@ void softposit_init(
         randu(pose2, cv::Scalar(-1.0), cv::Scalar(1.0));
 
         // try constraining the pose to be mostly upright?
+#if 0
         pose1[1] /= 1000.0;
         pose2[0] /= 100.0;
         pose2[1] = abs(pose2[1]);
         pose2[2] /= 100.0;
 
-#if 0
         //hack: set to known values for test
         pose1[0] = 0.0;
         pose1[1] = 1.0;
@@ -720,10 +724,8 @@ void softposit_init(
 
         pose1[3] = 0;
         pose2[3] = 0;
-        pose1 /= cv::norm(pose1);
-        pose2 /= cv::norm(pose2);
-        pose1 *= dist;
-        pose2 *= dist;
+        pose1 /= cv::norm(pose1) * dist;
+        pose2 /= cv::norm(pose2) * dist;
         pose1[3] = (xmax + xmin) / 2.0; // s*Tx
         pose2[3] = (ymax + ymin) / 2.0; // s*Ty
         if (!isfinite(pose1[0])) {
@@ -749,15 +751,17 @@ void softposit_init(
       assign_set_all_slack(&data->assign1, slack);
       assign_set_all_slack(&data->assign2, slack);
 
-      double avgdistsq = softposit_squared_dists(data, image_points, slack, 1);
+      data->beta_init = 0.445310; // 0.001; // -log(slack) / pow(*imgsize, 2.0); //avgdistsq;
+
+      double avgdistsq = softposit_squared_dists(data, image_points, slack, data->beta_init);
       // initial beta should make the exp(-beta*distsq) for average distsq the same as slack
-      data->beta_init = -log(slack) / pow(*imgsize, 2.0); //avgdistsq;
       // beta_final should be calculated similar, but we will use the expected distsq at the end
       // of the algorithm. A good value for expected distsq is probably something related to the
       // avg/smallest distsq of every image point to its closest neighbor?
       if (SPDEBUG_INIT) {
         printf("avgdistsq: %f   img: %f\n", avgdistsq, avgimgdistsq);
         printf("beta_init: %f   final: %f\n", data->beta_init, data->beta_final);
+        printf("beta_update: %f \n", data->beta_update);
       }
       
       // deterministic annealing loop
@@ -822,7 +826,7 @@ double softposit_squared_dists(
       if (SPDEBUG_DISTSQ) {
         printf("%ld %ld ", i, k);
         print_vec("point", obj->points[i]);
-        printf("dots: %f %f\n", dot1, dot2);
+        printf("correction %f dots: %f %f\n", data->correction[k], dot1, dot2);
       }
       if (isnan(dot1)) {
         print_vec("pose1", obj->pose1);
@@ -835,7 +839,7 @@ double softposit_squared_dists(
         abort();
       }
 
-      if (SPDEBUG_DISTSQ > 1) printf("distsq:");
+      if (SPDEBUG_DISTSQ_V) printf("distsq:");
       for (j = 0; j < image_points.size(); j++) {
         
         // compute squared distances
@@ -848,23 +852,14 @@ double softposit_squared_dists(
         // this is the formula from the paper, but if you use it then the
         // assign matrix never seems to try to assign any blobs to leds,
         // if you sum the squares of all the values, it is always near 0.
-        double val = exp(-beta * (distsq - data->alpha));
-        // printf("beta: %f  distsq: %f, alpha: %f\n", beta, distsq, data->alpha);
+        double x = -beta * (distsq - data->alpha) / data->alpha;
+        double val = slack * exp(x);
+        if (SPDEBUG_DISTSQ_V) printf("slack %f beta: %f  distsq: %f, alpha: %f\n", slack, beta, distsq, data->alpha);
 
-        // This is a formula I made up. It forces the values to spread out
-        // more so that the assign matrix will actually choose something
-        // instead of being wishy-washy.
-        // double val = 1 / (max(0.0, distsq - data->alpha) * beta + 1);
-        // val = pow(val, 1 + beta*2);
-
-        // if (val < 0.000001) val += (rand() % 100) / 10000.0;
-
-        if (SPDEBUG_DISTSQ > 1) printf("   %.3f,%.3f", distsq, val);
-        // if (abs(val) < 0.000001)
-        //   val = (random()%1000) / 1000000.0;
+        if (SPDEBUG_DISTSQ) printf("   %f dist %f -> %f\n", x, distsq, val);
         assign_set(&data->assign1, j, k, val);
       }
-      if (SPDEBUG_DISTSQ > 1) printf("\n");
+      if (SPDEBUG_DISTSQ) printf("\n");
     }
   }
   if (SPDEBUG_DISTSQ) {
@@ -1161,6 +1156,7 @@ void softposit(
 
   double imgsize, objsize;
 
+  printf("b4 data->alpha: %f\n", data->alpha);
   softposit_init(data, image_points, slack, &imgsize, &objsize);
 
 #if 0

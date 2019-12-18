@@ -74,11 +74,12 @@ cv::Mat projection(double n, double f) {
 
 cv::Vec4d apply(cv::Vec4d point, cv::Mat mat) {
   cv::Vec4d app = cv::Mat(cv::Mat(point).t() * mat);
-  // mprint_vec("applied", app);
+  //mprint_vec("applied", app);
   return app;
 }
 cv::Vec3d apply(cv::Vec3d point, cv::Mat mat) {
-  return mv4_to_v3(apply(mv3_to_v4(point, 1), mat));
+  cv::Vec3d app = mv4_to_v3(apply(mv3_to_v4(point, 1), mat));
+  return app;
 }
 // outputs point with x and y both >-0.5 and <0.5
 // points outside that range or invalid (inv/nan) should be
@@ -96,7 +97,7 @@ cv::Vec2d project(cv::Vec3d point, cv::Mat mat) {
     };
 }
 bool is_valid_2d(cv::Vec2d point) {
-  return point[0] > -0.5 && point[0] < 0.5 && point[1] > -0.5 && point[1] < 0.5;
+  return point[0] > -0.9 && point[0] < 0.9 && point[1] > -0.69 && point[1] < 0.66;
 }
 
 cv::Vec2d to_screen_space(cv::Vec2d point, double width, double height) {
@@ -110,7 +111,7 @@ int main(int argc, char** argv)
 {
   // printf("\n\n\nSoftposit test\n");
 
-  double x = 10, y = 5, z = 40;
+  double x = 0, y = 0, z = 1000000;
   double s = 1;
   double alpha = 1, beta = 0.1, beta_update = 1.1, beta_final = 1;
 
@@ -149,26 +150,50 @@ int main(int argc, char** argv)
 
 
   std::vector<cv::Vec3d> objpts = {
-    {4, 6, 6},
-    {3, 5, 5},
-    {3, 1, 3},
-    {10, 10, 0},
-    {6, 8, -6},
-
-    {-4, 3, 6},
-    {-8, 6, 1},
-    {-4, 3, -2},
-    {-1, 2, -7},
-
-    {7, -3,  6},
-    {0, -14, 0},
-    {4, -8, -2},
-    {0, -2, -9},
-
-    {-6, -5, 7},
-    {-8, -8, -1},
-    {-6, -5, -3},
-    {-2, -4, -6},
+                {63321, -31734, 67534},
+                { 77003, 1460, 65643},
+                { 29006, -19167, 73205},
+                { -92, -33409, 72387},
+                { -29277, -19280, 73313},
+                { -63317, -32109, 67604},
+                { -77328, 974, 65640},
+                { -54084, 34504, 68768},
+                { -20154, 17780, 74139},
+                { 53480, 34724, 68953},
+                { 19668, 17820, 74205},
+                { -78986, -12270, 28013},
+                { -77680, -12236, -8572},
+                { -70629, -31636, 9905},
+                { -58930, -40868, 36014},
+                { 59269, -40973, 36524},
+                { 28475, -43555, 61577},
+                { -80405, -24558, 53251},
+                { -27802, -43408, 61279},
+                { 70969, -31734, 10382},
+                { 77642, -12844, -8764},
+                { 79166, -12197, 28124},
+                { 80537, -24730, 53440},
+                { -28909, 43724, 57823},
+                { -78119, 29616, 53275},
+                { 72085, 30581, 46},
+                { 66860, 37604, 29608},
+                { 78145, 29213, 52728},
+                { 29098, 43572, 57637},
+                { -66825, 37894, 30136},
+                { -72217, 30765, 462},
+                { -41038, 43365, 23723},
+                { 3, 43958, 33539},
+                { 41065, 43154, 23442},
+                { -11850, 25964, -164021},
+                { -24139, 7160, -160920},
+                { -32821, -11851, -153895},
+                { -40456, -31212, -140108},
+                { -15097, -42169, -142923},
+                { 14884, -42172, -142921},
+                { 40417, -31186, -139999},
+                { 33046, -11639, -153922},
+                { 24183, 7138, -161111},
+                { 11832, 25969, -164177},
   };
 
   cv::Vec3d camera_vec = {0, 0, 1};
@@ -184,7 +209,7 @@ int main(int argc, char** argv)
 
   std::vector<cv::Point2f> imgpts(0);
 
-  double focal_length = 10;
+  double focal_length = 1;
 
   for (size_t i = 0; i < objpts.size(); i++) {
     objpts[i] = apply(objpts[i], scale);
@@ -209,11 +234,13 @@ int main(int argc, char** argv)
 	softposit_data *sp = softposit_new();
 	softposit_add_object(sp, obj);
 
+#if 0
   sp->beta_init = beta; //0.1;
   sp->beta_update = beta_update; // 1.1;
   sp->beta_final = beta_final; //1;
   sp->focal_length = focal_length;
   sp->alpha = alpha; //0; //1/focal_length;
+#endif
 
 	softposit(sp, imgpts);
 
