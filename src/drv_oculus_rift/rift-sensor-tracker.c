@@ -348,16 +348,6 @@ rift_sensor_new (ohmd_context* ohmd_ctx, int id, const char *serial_no, libusb_d
 
   sensor_ctx->bw = blobwatch_new(sensor_ctx->stream.width, sensor_ctx->stream.height);
 
-  LOGI("Sensor %d starting stream\n", id);
-  ret = rift_sensor_uvc_stream_start (&sensor_ctx->stream);
-  ASSERT_MSG(ret >= 0, fail, "could not start streaming\n");
-  sensor_ctx->stream_started = 1;
-
-  LOGV("Sensor %d enabling exposure sync\n", id);
-  ret = rift_sensor_ar0134_init(sensor_ctx->usb_devh);
-  if (ret < 0)
-    goto fail;
-
   LOGV("Sensor %d - setting up radio\n", id);
   ret = rift_sensor_esp770u_setup_radio(sensor_ctx->usb_devh, radio_id);
   if (ret < 0)
@@ -369,6 +359,16 @@ rift_sensor_new (ohmd_context* ohmd_ctx, int id, const char *serial_no, libusb_d
 	LOGE("Failed to read Rift sensor calibration data");
 	goto fail;
   }
+
+  LOGI("Sensor %d starting stream\n", id);
+  ret = rift_sensor_uvc_stream_start (&sensor_ctx->stream);
+  ASSERT_MSG(ret >= 0, fail, "could not start streaming\n");
+  sensor_ctx->stream_started = 1;
+
+  LOGV("Sensor %d enabling exposure sync\n", id);
+  ret = rift_sensor_ar0134_init(sensor_ctx->usb_devh);
+  if (ret < 0)
+    goto fail;
 
   LOGI("Sensor %d ready\n", id);
 
