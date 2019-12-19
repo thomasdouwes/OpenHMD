@@ -6,14 +6,14 @@ using namespace std;
 
 #define SPDEBUG_ALL 1
 #define SPDEBUG_INIT (SPDEBUG_ALL && 1)
-#define SPDEBUG_DISTSQ (SPDEBUG_ALL && 1)
+#define SPDEBUG_DISTSQ (SPDEBUG_ALL && 0)
 #define SPDEBUG_DISTSQ_V (SPDEBUG_ALL && 0)
-#define SPDEBUG_L (SPDEBUG_ALL && 1)
-#define SPDEBUG_ASSIGN (SPDEBUG_ALL && 1)
+#define SPDEBUG_L (SPDEBUG_ALL && 0)
+#define SPDEBUG_ASSIGN (SPDEBUG_ALL && 0)
 #define SPDEBUG_ROTTRANS (SPDEBUG_ALL && 0)
-#define SPDEBUG_LOOP (SPDEBUG_ALL && 1)
+#define SPDEBUG_LOOP (SPDEBUG_ALL && 0)
 #define SPDEBUG_KBWAIT (SPDEBUG_ALL && 0)
-#define SPDEBUG_DONE (SPDEBUG_ALL && 1)
+#define SPDEBUG_DONE (SPDEBUG_ALL && 0)
 
 Object* softposit_new_object(std::vector<cv::Vec3d> points) {
   Object* obj = new Object; //(Object*)calloc(1, sizeof(Object));
