@@ -151,6 +151,7 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
   if (num_blobs >= 4) {
 	/* SoftPOSIT matching */
 	std::vector<cv::Vec3d> list_points3d_all(num_led_pos);
+	std::vector<cv::Vec3d> list_normals_all(num_led_pos);
 	std::vector<cv::Point2f> list_points2d_all(num_blobs);
 	std::vector<cv::Point2f> list_points2d_all_undistorted; // (num_blobs);
 
@@ -163,11 +164,14 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 		list_points3d_all[j][0] = leds[j].pos.x;
 		list_points3d_all[j][1] = leds[j].pos.y;
 		list_points3d_all[j][2] = leds[j].pos.z;
+		list_normals_all[j][0] = leds[j].dir.x;
+		list_normals_all[j][1] = leds[j].dir.y;
+		list_normals_all[j][2] = leds[j].dir.z;
 	}
 
 	cv::fisheye::undistortPoints(list_points2d_all, list_points2d_all_undistorted, fishK, fishDistCoeffs);
 
-	Object *obj = softposit_new_object(list_points3d_all);
+	Object *obj = softposit_new_object(list_points3d_all, list_normals_all);
 				 
 	softposit_data *sp = softposit_new();
 	softposit_add_object(sp, obj);
@@ -180,11 +184,23 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 	// printf("               %f %f %f\n", obj->rotation.at<double>(1, 0), obj->rotation.at<double>(1, 1), obj->rotation.at<double>(1, 2));
 	// printf("               %f %f %f\n", obj->rotation.at<double>(2, 0), obj->rotation.at<double>(2, 1), obj->rotation.at<double>(2, 2));
 
-	tvec = obj->translation;
 	printf("softposit trans: %f %f %f %f\n", obj->translation[0], obj->translation[1], obj->translation[2], obj->translation[3]);
+
+			vec3f v;
+			double angle = sqrt(rvec.dot(rvec));
+			double inorm = 1.0f / angle;
+		
+			v.x = rvec.at<double>(0) * inorm;
+			v.y = rvec.at<double>(1) * inorm;
+			v.z = rvec.at<double>(2) * inorm;
+			oquatf_init_axis (rot, &v, angle);
+		
+			for (i = 0; i < 3; i++)
+				trans->arr[i] = obj->translation[i];
 
 	softposit_free_object(obj);
 	softposit_free(sp);
+  return true;
   }
 
 	// abort();

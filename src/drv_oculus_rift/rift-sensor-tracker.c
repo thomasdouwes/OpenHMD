@@ -53,7 +53,7 @@ static int tracker_process_blobs(rift_sensor_ctx *ctx)
     kalman_pose_update (ctx->pose_filter, ctx->frame_sof_ts, &trans, &rot);
     kalman_pose_get_estimated (ctx->pose_filter, &ctx->pose_pos, &ctx->pose_orient);
 
-#if 0
+#if 1
     printf ("sensor %u Got PnP pose quat %f %f %f %f  pos %f %f %f from %d LEDs\n", ctx->id,
 				ctx->pose_orient.x, ctx->pose_orient.y, ctx->pose_orient.z, ctx->pose_orient.w,
 				ctx->pose_pos.x, ctx->pose_pos.y, ctx->pose_pos.z,

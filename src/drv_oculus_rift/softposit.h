@@ -14,13 +14,14 @@
 
 typedef struct {
   std::vector<cv::Vec3d> points;
+  std::vector<cv::Vec3d> normals;
   cv::Mat L_inv; // line of sight?
   cv::Vec4d pose1, pose2; // pose vectors TODO: random or initial pose?
   cv::Vec3d translation;
   cv::Mat rotation;
 } Object;
 
-Object* softposit_new_object(std::vector<cv::Vec3d> points);
+Object* softposit_new_object(std::vector<cv::Vec3d> points, std::vector<cv::Vec3d> normals);
 void softposit_free_object(Object* obj);
 
 
@@ -47,6 +48,8 @@ typedef struct {
   std::vector<Object*> objects;
 
   std::vector<double> correction; // correction terms (w)
+  std::vector<int> occlusion_mask; // non-zero if the point is visible in the current pose. 
+                                   // dot product based on normals and current pose
   assign_mat assign1;
   assign_mat assign2;
 

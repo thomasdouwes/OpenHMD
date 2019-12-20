@@ -4,20 +4,23 @@
 
 using namespace std;
 
-#define SPDEBUG_ALL 1
-#define SPDEBUG_INIT (SPDEBUG_ALL && 1)
+#define SPDEBUG_ALL 0
+#define SPDEBUG_INIT (SPDEBUG_ALL && 0)
 #define SPDEBUG_DISTSQ (SPDEBUG_ALL && 0)
 #define SPDEBUG_DISTSQ_V (SPDEBUG_ALL && 0)
 #define SPDEBUG_L (SPDEBUG_ALL && 0)
 #define SPDEBUG_ASSIGN (SPDEBUG_ALL && 0)
 #define SPDEBUG_ROTTRANS (SPDEBUG_ALL && 0)
+#define SPDEBUG_OCCLUSION (SPDEBUG_ALL && 1)
 #define SPDEBUG_LOOP (SPDEBUG_ALL && 0)
 #define SPDEBUG_KBWAIT (SPDEBUG_ALL && 0)
-#define SPDEBUG_DONE (SPDEBUG_ALL && 0)
+#define SPDEBUG_DONE (SPDEBUG_ALL && 1)
 
-Object* softposit_new_object(std::vector<cv::Vec3d> points) {
+Object* softposit_new_object(std::vector<cv::Vec3d> points,
+           std::vector<cv::Vec3d> normals) {
   Object* obj = new Object; //(Object*)calloc(1, sizeof(Object));
   obj->points = points;
+  obj->normals = normals;
   // pose vectors TODO: random or initial pose?
   obj->pose1 = cv::Vec4d(0.0f);
   obj->pose2 = cv::Vec4d(0.0f); 
@@ -398,7 +401,7 @@ assign_mat *assign_normalize(assign_mat *assign2, assign_mat *assign1, double sm
     assign_prev = assign == assign1? assign2 : assign1;
     // abort();
     iters++;
-  } while (iters < 50 || (assign_norm > small && abs(last_assign_norm - assign_norm) > 0.0000001)); // what is small here?
+  } while (iters < 5 || (assign_norm > small && abs(last_assign_norm - assign_norm) > 0.0000001)); // what is small here?
 
   // swap back
   assign = assign_prev;
@@ -547,11 +550,14 @@ void print_mat(const char* name, cv::Mat* m) {
   for (int i = 0; i < m->rows; i++) {
     printf("    ");
     for (int j = 0; j < m->cols; j++) {
-      printf("% .2e ", m->at<double>(i, j));
+      printf("% .3f ", m->at<double>(i, j));
     }
     printf("\n");
   }
 }
+
+static void softposit_compute_rot_trans(softposit_data *data, Object *obj);
+static void softposit_update_occlusion(softposit_data *data);
 
 softposit_data* softposit_new() {
   softposit_data *data = new softposit_data;
@@ -565,7 +571,7 @@ softposit_data* softposit_new() {
   data->small = 0.00001;
   data->focal_length = 1.0; // ?
   //data->alpha = 0; //0.0001; // TODO: This is often computed based on noise in the image.
-  data->alpha = 5.0 * pow (9.21/715.0, 2.0); // Approximately 5 pixel error, with 0.99 probability?
+  data->alpha = 0.01; // pow (10/715.0, 2.0); // Don't match blobs more than 50 pixels away
   data->num_object_points = 0;
 
   data->assign1 = assign_mat_new(0, 0);
@@ -587,6 +593,7 @@ void softposit_add_object(softposit_data* data, Object *obj) {
   if (data->num_object_points > 0) {
     // printf("add_object %ld %ld\n", data->num_object_points, obj->points.size());
     data->correction.resize(data->num_object_points);
+    data->occlusion_mask.resize(data->num_object_points);
   }
 }
 
@@ -596,7 +603,7 @@ assign_mat *softposit_one_setup(
   double slack,
   double beta
 );
-void softposit_one(
+bool softposit_one(
   softposit_data *data,
   const std::vector<cv::Point2f> &image_points,
   double slack,
@@ -643,9 +650,10 @@ void softposit_init(
   cv::Vec4d best_pose2;
   double best_sqsum = 2000000000000.0;
 
-  // initialize correction
+  // initialize correction and (all visible) occlusion mask
   for (k = 0; k < data->num_object_points; k++) {
     data->correction[k] = 1;
+    data->occlusion_mask[k] = 0;
   }
 
   for (o = 0, k = 0; o < data->objects.size(); o++) {
@@ -721,7 +729,8 @@ void softposit_init(
         pose2[1] = 1.0;
         pose2[2] = 0.0;
 #endif
-
+        /* Normalise the pose and scale for approximate distance
+         * based on width/height of the image blob region */
         pose1[3] = 0;
         pose2[3] = 0;
         pose1 /= cv::norm(pose1) * dist;
@@ -738,6 +747,8 @@ void softposit_init(
       // printf("norms %d %d %d %d\n", isinf(norm1), isnan(norm1), isinf(norm2), isnan(norm2));
       obj->pose1 = pose1;
       obj->pose2 = pose2;
+      softposit_compute_rot_trans(data, obj);
+      softposit_update_occlusion(data);
 
       if (SPDEBUG_INIT) print_vec("init pose1", obj->pose1);
       if (SPDEBUG_INIT) print_vec("init pose2", obj->pose2);
@@ -769,7 +780,8 @@ void softposit_init(
       double beta_final = data->beta_final;
       while (beta < beta_final) {
         if (SPDEBUG_LOOP) printf("\n\nsoftposit loop start beta: %f\n", beta);
-        softposit_one(data, image_points, slack, beta, *imgsize, *objsize);
+        if (!softposit_one(data, image_points, slack, beta, *imgsize, *objsize))
+          break;
         beta *= data->beta_update;
         // break;
       }
@@ -791,6 +803,7 @@ void softposit_init(
         best_sqsum = avgdistsq;
         best_pose1 = pose1;
         best_pose2 = pose2;
+        if (SPDEBUG_LOOP) printf ("New best pose! best_sqsum = %f\n", best_sqsum);
       }
     }
 
@@ -798,6 +811,7 @@ void softposit_init(
 
     obj->pose1 = best_pose1;
     obj->pose2 = best_pose2;
+    softposit_compute_rot_trans(data, obj);
   }
 }
 
@@ -839,25 +853,34 @@ double softposit_squared_dists(
         abort();
       }
 
-      if (SPDEBUG_DISTSQ_V) printf("distsq:");
-      for (j = 0; j < image_points.size(); j++) {
-        
-        // compute squared distances
-        double distsq = 
-          pow(dot1 - data->correction[k] * image_points[j].x, 2.0) + 
-          pow(dot2 - data->correction[k] * image_points[j].y, 2.0);
-        
-        distsqsum += distsq;
-        
-        // this is the formula from the paper, but if you use it then the
-        // assign matrix never seems to try to assign any blobs to leds,
-        // if you sum the squares of all the values, it is always near 0.
-        double x = -beta * (distsq - data->alpha) / data->alpha;
-        double val = slack * exp(x);
-        if (SPDEBUG_DISTSQ_V) printf("slack %f beta: %f  distsq: %f, alpha: %f\n", slack, beta, distsq, data->alpha);
+      if (data->occlusion_mask[k] == 0) {
+        if (SPDEBUG_DISTSQ_V) printf("distsq:");
+        for (j = 0; j < image_points.size(); j++) {
+          double val;
 
-        if (SPDEBUG_DISTSQ) printf("   %f dist %f -> %f\n", x, distsq, val);
-        assign_set(&data->assign1, j, k, val);
+          // compute squared distances
+          double distsq = 
+            pow(dot1 - data->correction[k] * image_points[j].x, 2.0) + 
+            pow(dot2 - data->correction[k] * image_points[j].y, 2.0);
+          
+          distsqsum += distsq;
+          
+          // this is the formula from the paper, but if you use it then the
+          // assign matrix never seems to try to assign any blobs to leds,
+          // if you sum the squares of all the values, it is always near 0.
+          double x = -beta / data->alpha * (distsq - data->alpha);
+          val = slack * exp(x);
+          if (SPDEBUG_DISTSQ_V) printf("slack %f beta: %f  distsq: %f, alpha: %f\n", slack, beta, distsq, data->alpha);
+          if (SPDEBUG_DISTSQ) printf("   dist %f exp(%f) -> %f\n", distsq, x, val);
+
+          assign_set(&data->assign1, j, k, val);
+        }
+      }
+      else {
+        if (SPDEBUG_DISTSQ) printf("occluded\n");
+        for (j = 0; j < image_points.size(); j++) {
+          assign_set(&data->assign1, j, k, 0.0);
+        }
       }
       if (SPDEBUG_DISTSQ) printf("\n");
     }
@@ -913,7 +936,7 @@ bool randomize_vec3_if_near_zero(cv::Vec4d &v) {
   return false;
 }
 
-void softposit_update_pose_vectors(
+bool softposit_update_pose_vectors(
   softposit_data *data,
   const std::vector<cv::Point2f> &image_points,
   assign_mat *assign,
@@ -941,14 +964,16 @@ void softposit_update_pose_vectors(
   obj->pose2 = cv::Mat(L_inv * obj->pose2);
 
   if (abs(obj->pose1[0]) + abs(obj->pose1[1]) + abs(obj->pose1[2]) + abs(obj->pose2[0]) + abs(obj->pose2[1]) + abs(obj->pose2[2]) < 0.000000001) {
-    print_mat("L_inv", &L_inv);
-    print_vec("pose1", obj->pose1);
-    print_vec("pose2", obj->pose2);
-    printf("abort pose1 pose2 = 0\n");
+    //print_mat("L_inv", &L_inv);
+    //print_vec("pose1", obj->pose1);
+    //print_vec("pose2", obj->pose2);
+    //printf("abort pose1 pose2 = 0\n");
     // abort();
     // obj->pose1[0] = 0.1;
     // obj->pose2[1] = 0.1;
+    return false;
   }
+  return true;
 }
 
 // returns the cross product
@@ -989,9 +1014,7 @@ void make_orthogonal_v3_in_v4(cv::Vec4d &a, cv::Vec4d &b, bool unitlen) {
 
 void softposit_compute_rot_trans(
   softposit_data *data,
-  Object *obj,
-  double imgsize,
-  double objsize
+  Object *obj
 ) {
   double n1 = cv::norm(v4_to_v3(obj->pose1));
   double n2 = cv::norm(v4_to_v3(obj->pose2));
@@ -1056,6 +1079,30 @@ void softposit_compute_rot_trans(
   if (SPDEBUG_ROTTRANS) print_vec("trans", obj->translation);
 }
 
+static void softposit_update_occlusion(softposit_data *data)
+{
+  size_t i, o, k;
+  Object *obj;
+
+  for (o = 0, k = 0; o < data->objects.size(); o++) {
+    obj = data->objects[o];
+    for (i = 0; i < obj->points.size(); i++, k++) {
+      cv::Mat trans = cv::Mat(obj->translation);
+      cv::Mat rotated_pos = (obj->points[i].t() * obj->rotation) + trans.t();
+      cv::Mat rotated_normal = (obj->normals[i].t() * obj->rotation);
+
+      /* If dot < 0, the point is visible. If it's > 0, the point is occluded - mask = 1 */
+      data->occlusion_mask[k] = (rotated_pos.dot(rotated_normal) > 0);
+      if (SPDEBUG_OCCLUSION) {
+        printf("Obj point %d\n", (int) k);
+        print_mat ("pos", &rotated_pos);
+        print_mat ("normal", &rotated_normal);
+        printf ("  occlusion = %d\n", data->occlusion_mask[k]);
+      }
+    }
+  }
+}
+
 void softposit_compute_correction(
   softposit_data *data
 ) {
@@ -1087,7 +1134,7 @@ assign_mat *softposit_one_setup(
     return assign_normalize(&data->assign2, &data->assign1, data->small, 1 /*beta * 2*/);
 }
 
-void softposit_one(
+bool softposit_one(
   softposit_data *data,
   const std::vector<cv::Point2f> &image_points,
   double slack,
@@ -1105,7 +1152,8 @@ void softposit_one(
     for (size_t o = 0, k = 0; o < data->objects.size(); o++) {
       Object *obj = data->objects[o];
 
-      softposit_update_pose_vectors(data, image_points, assign, L_inv, k, obj);
+      if (!softposit_update_pose_vectors(data, image_points, assign, L_inv, k, obj))
+        return false;
 
       // try to kick pose vectors out of the 0 rut?
       // bool z1 = randomize_vec3_if_near_zero(obj->pose1);
@@ -1131,15 +1179,17 @@ void softposit_one(
       // }
       
 
-      softposit_compute_rot_trans(data, obj, imgsize, objsize);
-
+      softposit_compute_rot_trans(data, obj);
     }
 
     if (!some_zero) {
 
+      softposit_update_occlusion(data);
       softposit_compute_correction(data);
       if (SPDEBUG_LOOP) print_vector("correction", data->correction);
     }
+
+    return true;
 }
 
 void softposit(
@@ -1156,7 +1206,6 @@ void softposit(
 
   double imgsize, objsize;
 
-  printf("b4 data->alpha: %f\n", data->alpha);
   softposit_init(data, image_points, slack, &imgsize, &objsize);
 
 #if 0

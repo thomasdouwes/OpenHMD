@@ -62,12 +62,12 @@ cv::Mat scaling(double x, double y, double z) {
 //   return cv::Mat(4, 4, CV_64F, scaled);
 // }
 
-cv::Mat projection(double n, double f) {
+cv::Mat projection(double f) {
   double projd[16] = {
     1,  0,  0,          0,
     0,  1,  0,          0,
-    0,  0,  (f+n)/(f-n),   1,
-    0,  0,  -2*f*n/(n-f), 0,
+    0,  0,  1,          0,
+    0,  0,  0, 1,
   };
   return cv::Mat(4, 4, CV_64F, projd).clone();
 }
@@ -81,9 +81,8 @@ cv::Vec3d apply(cv::Vec3d point, cv::Mat mat) {
   cv::Vec3d app = mv4_to_v3(apply(mv3_to_v4(point, 1), mat));
   return app;
 }
-// outputs point with x and y both >-0.5 and <0.5
-// points outside that range or invalid (inv/nan) should be
-// rejected as outside the camrea frame
+
+// Project a 3D coord down to 2D
 cv::Vec2d project(cv::Vec3d point, cv::Mat mat) {
     cv::Vec4d p = cv::Mat(mat * mv3_to_v4(point, 1));
     // cv::Vec4d p = cv::Mat(cv::Mat(v3_to_v4(point, 1)).t() * mat);
@@ -96,6 +95,9 @@ cv::Vec2d project(cv::Vec3d point, cv::Mat mat) {
       (p[1]) / (p[2]),
     };
 }
+// outputs point with x between -0.9 and 0.9, and y between -0.69 and 0.69;
+// points outside that range or invalid (inv/nan) should be
+// rejected as outside the camrea frame
 bool is_valid_2d(cv::Vec2d point) {
   return point[0] > -0.9 && point[0] < 0.9 && point[1] > -0.69 && point[1] < 0.66;
 }
@@ -148,6 +150,52 @@ int main(int argc, char** argv)
     }
   }
 
+  std::vector<cv::Vec3d> normals = {
+     {0.181956,-0.102972,0.977900},
+     {0.299055,0.001984,0.954234},
+     {0.082983,-0.096960,0.991823},
+     {0.000000,-0.188028,0.982164},
+     {-0.082983,-0.096960,0.991823},
+     {-0.181956,-0.102972,0.977900},
+     {-0.299055,0.001984,0.954234},
+     {-0.140969,0.134957,0.980772},
+     {-0.056979,0.095951,0.993754},
+     {0.140969,0.134957,0.980772},
+     {0.056979,0.095951,0.993754},
+     {-0.993057,-0.099980,-0.061984},
+     {-0.981566,-0.188915,-0.028963},
+     {-0.734056,-0.668042,-0.121987},
+     {-0.153997,-0.983099,-0.099003},
+     {0.153997,-0.983099,-0.099003},
+     {-0.004975,-0.998636,-0.051974},
+     {-0.947594,-0.225904,-0.225904},
+     {0.004975,-0.998636,-0.051974},
+     {0.734056,-0.668042,-0.121987},
+     {0.981566,-0.188915,-0.028963},
+     {0.993057,-0.099980,-0.061984},
+     {0.947594,-0.225904,-0.225904},
+     {-0.004975,0.999980,0.003998},
+     {-0.871752,0.428856,-0.236921},
+     {0.816019,0.577024,-0.033998},
+     {0.526908,0.847875,-0.058962},
+     {0.871752,0.428856,-0.236921},
+     {0.004975,0.999980,0.003998},
+     {-0.526908,0.847875,-0.058962},
+     {-0.816019,0.577024,-0.033998},
+     {-0.041995,0.999110,-0.003998},
+     {0.005982,0.999932,0.009980},
+     {0.041995,0.999110,-0.003998},
+     {-0.208077,0.144049,-0.967447},
+     {-0.421008,-0.007996,-0.907022},
+     {-0.493130,-0.214031,-0.843216},
+     {-0.505856,-0.473871,-0.720802},
+     {-0.147928,-0.689771,-0.708754},
+     {0.147928,-0.689771,-0.708754},
+     {0.505856,-0.473871,-0.720802},
+     {0.493130,-0.214031,-0.843216},
+     {0.421008,-0.007996,-0.907022},
+     {0.208077,0.144049,-0.967447},
+  };
 
   std::vector<cv::Vec3d> objpts = {
                 {63321, -31734, 67534},
@@ -201,7 +249,7 @@ int main(int argc, char** argv)
   cv::Mat trans = translate(x, y, z);
   cv::Mat scale = scaling(s, s, s);
 
-  cv::Mat proj = projection(1, 200000);
+  cv::Mat proj = projection(1);
 
   // mprint_mat("trans", &trans);
 
@@ -211,13 +259,25 @@ int main(int argc, char** argv)
 
   double focal_length = 1;
 
-  for (size_t i = 0; i < objpts.size(); i++) {
-    objpts[i] = apply(objpts[i], scale);
+  assert(objpts.size() == normals.size());
 
-    if (camera_vec.dot(objpts[i]) > 0) continue; // only vectors pointing towards camera
+  for (size_t i = 0; i < objpts.size(); i++) {
+    double visible;
+
+    objpts[i] = apply(objpts[i], scale);
+    normals[i] = apply(normals[i], scale);
+
+    visible = apply(objpts[i], trans).dot(normals[i]);
+#if 1
+    mprint_vec("3d", apply(objpts[i], trans));
+    mprint_vec("normal", normals[i]);
+    printf("visible %f = %s\n", visible, visible > 0 ? "no" : "yes");
+#endif
+
+    if (visible > 0) continue; // only vectors pointing towards camera
 
     cv::Vec2d p = project(apply(objpts[i], trans), mat);
-    // mprint_vec("2d", p);
+    mprint_vec("2d", p);
     if (is_valid_2d(p)) {
       p = to_screen_space(p, focal_length, focal_length);
       imgpts.push_back({(float)p[0], (float)p[1]});
@@ -229,7 +289,7 @@ int main(int argc, char** argv)
   // double l = 0.00001;
   // printf("%f log:%f sqrtlog:%f\n", l, log(l), sqrt(-log(l)));
 
-	Object *obj = softposit_new_object(objpts);
+	Object *obj = softposit_new_object(objpts, normals);
 				 
 	softposit_data *sp = softposit_new();
 	softposit_add_object(sp, obj);
