@@ -20,7 +20,11 @@ cdata.set_quoted('GST_PACKAGE_ORIGIN', 'https://www.openhmd.net')
 configure_file(output : 'config.h', configuration : cdata)
 
 dep_libm = meson.get_compiler('c').find_library('m', required: false)
-dep_opencv = dependency('opencv3')
+dep_opencv = dependency('opencv3', required: false)
+if not dep_opencv.found()
+  dep_opencv = dependency('opencv')
+endif
+
 
 gst_dep = dependency('gstreamer-1.0',
     fallback : ['gstreamer', 'gst_dep'])
@@ -36,6 +40,7 @@ plugin_sources = [
   '../src/drv_oculus_rift/rift-sensor-maths.c',
   '../src/drv_oculus_rift/rift-sensor-opencv.cpp',
   '../src/drv_oculus_rift/kalman.cpp',
+  '../src/drv_oculus_rift/softposit.cpp',
   'rift.c'
   ]
 
