@@ -401,6 +401,7 @@ int rift_sensor_uvc_stream_clear (struct rift_sensor_uvc_stream *stream)
 	int i;
 
 	for (i = 0; i < stream->num_transfers; i++) {
+		free(stream->transfer[i]->buffer);
 		libusb_free_transfer(stream->transfer[i]);
 		stream->transfer[i] = NULL;
 	}

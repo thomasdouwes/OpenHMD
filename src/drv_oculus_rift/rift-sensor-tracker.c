@@ -389,8 +389,9 @@ rift_sensor_new (ohmd_context* ohmd_ctx, int id, const char *serial_no, libusb_d
 
   LOGI("Sensor %d starting stream\n", id);
   ret = rift_sensor_uvc_stream_start (&sensor_ctx->stream);
-  ASSERT_MSG(ret >= 0, fail, "could not start streaming\n");
   sensor_ctx->stream_started = 1;
+
+  ASSERT_MSG(ret >= 0, fail, "could not start streaming\n");
 
   LOGV("Sensor %d enabling exposure sync\n", id);
   ret = rift_sensor_ar0134_init(sensor_ctx->usb_devh);
@@ -467,8 +468,6 @@ rift_sensor_tracker_new (ohmd_context* ohmd_ctx,
 	for (i = 0; devs[i]; ++i) {
 		struct libusb_device_descriptor desc;
 		libusb_device_handle *usb_devh;
-		rift_sensor_ctx *sensor_ctx = NULL;
-		unsigned char serial[33];
 
 		ret = libusb_get_device_descriptor(devs[i], &desc);
 		if (ret < 0)
