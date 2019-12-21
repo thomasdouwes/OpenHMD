@@ -23,6 +23,7 @@
 #define min(a,b) ((a) < (b) ? (a) : (b))
 
 static uint8_t rift_sensor_tracker_get_led_pattern_phase (rift_tracker_ctx *ctx, uint64_t *ts);
+static void pose_matching_debug_cb (rift_sensor_ctx *sensor_ctx, DebugPoseType pose_type, quatf *pose_orient, vec3f *trans);
 
 static int tracker_process_blobs(rift_sensor_ctx *ctx)
 {
@@ -49,7 +50,7 @@ static int tracker_process_blobs(rift_sensor_ctx *ctx)
    */
   if (estimate_initial_pose(bwobs->blobs, bwobs->num_blobs, ctx->tracker->leds->points,
             ctx->tracker->leds->num_points, camera_matrix, dist_coeffs, &rot, &trans,
-            &num_leds, true)) {
+            &num_leds, true, (DebugVisCallback) pose_matching_debug_cb, ctx)) {
     kalman_pose_update (ctx->pose_filter, ctx->frame_sof_ts, &trans, &rot);
     kalman_pose_get_estimated (ctx->pose_filter, &ctx->pose_pos, &ctx->pose_orient);
 
@@ -308,6 +309,32 @@ static void new_frame_cb(struct rift_sensor_uvc_stream *stream)
 		ohmd_pw_debug_stream_push (sensor_ctx->debug_metadata, sensor_ctx->frame_sof_ts, "{ debug: \"debug!\" }");
 }
 
+static void
+pose_matching_debug_cb (rift_sensor_ctx *sensor_ctx, DebugPoseType pose_type, quatf *pose_orient, vec3f *trans)
+{
+  static quatf init_orient;
+  static vec3f init_trans;
+
+	if (sensor_ctx->debug_vid == NULL)
+    return;
+
+  /* Draw blobs and the current pose (blue) */
+	draw_blob_debug_stuff(sensor_ctx, &sensor_ctx->stream);
+	draw_projected_leds_at(sensor_ctx, sensor_ctx->tracker->leds, &sensor_ctx->stream, &sensor_ctx->pose_orient, &sensor_ctx->pose_pos, 0xFF0000);
+
+  /* Draw the initial pose, or else draw the initial pose (green) + the intermediate guess posed (red) */
+  if (pose_type == DEBUG_POSE_INITIAL) {
+	  draw_projected_leds_at(sensor_ctx, sensor_ctx->tracker->leds, &sensor_ctx->stream, pose_orient, trans, 0x00FF00);
+    init_orient = *pose_orient;
+    init_trans = *trans;
+  } else {
+	  draw_projected_leds_at(sensor_ctx, sensor_ctx->tracker->leds, &sensor_ctx->stream, &init_orient, &init_trans, 0x00FF00);
+	  draw_projected_leds_at(sensor_ctx, sensor_ctx->tracker->leds, &sensor_ctx->stream, pose_orient, trans, 0x0000FF);
+  }
+
+	ohmd_pw_video_stream_push (sensor_ctx->debug_vid, ohmd_monotonic_get(sensor_ctx->tracker->ohmd_ctx), sensor_ctx->stream.debug_frame);
+  ohmd_sleep(1.0/60.0);
+}
 
 static void rift_sensor_free (rift_sensor_ctx *sensor_ctx);
 

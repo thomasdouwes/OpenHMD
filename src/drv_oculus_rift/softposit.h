@@ -12,6 +12,8 @@
 
 #include <opencv2/calib3d/calib3d.hpp>
 
+#include "debug-common.h"
+
 typedef struct {
   std::vector<cv::Vec3d> points;
   std::vector<cv::Vec3d> normals;
@@ -53,9 +55,13 @@ typedef struct {
   assign_mat assign1;
   assign_mat assign2;
 
+  DebugVisCallback debug_cb;
+  void *debug_cb_data;
 } softposit_data;
 
 softposit_data* softposit_new();
+
+void softposit_set_debug(softposit_data *data, DebugVisCallback debug_cb, void *cb_data);
 
 void softposit_free(softposit_data* data);
 

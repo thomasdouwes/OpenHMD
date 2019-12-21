@@ -2,6 +2,11 @@
 
 #include "softposit.h"
 
+extern "C" {
+#include "../omath.h"
+};
+
+
 using namespace std;
 
 #define SPDEBUG_ALL 0
@@ -576,8 +581,43 @@ softposit_data* softposit_new() {
 
   data->assign1 = assign_mat_new(0, 0);
   data->assign2 = assign_mat_new(0, 0);
+  data->debug_cb = NULL;
+  data->debug_cb_data = NULL;
 
   return data;
+}
+
+void softposit_set_debug(softposit_data *data, DebugVisCallback debug_cb, void *cb_data)
+{
+  data->debug_cb = debug_cb;
+  data->debug_cb_data = cb_data;
+}
+
+static void softposit_send_debug (softposit_data *data, Object *obj, DebugPoseType pose_type)
+{
+  if (data->debug_cb == NULL)
+    return;
+
+  quatf rot;
+  vec3f trans;
+  int i;
+
+  cv::Mat rvec = cv::Mat::zeros(3, 1, CV_64FC1);
+  cv::Rodrigues(obj->rotation, rvec);
+
+  vec3f v;
+  double angle = sqrt(rvec.dot(rvec));
+  double inorm = 1.0f / angle;
+
+  v.x = rvec.at<double>(0) * inorm;
+  v.y = rvec.at<double>(1) * inorm;
+  v.z = rvec.at<double>(2) * inorm;
+  oquatf_init_axis (&rot, &v, angle);
+
+  for (i = 0; i < 3; i++)
+    trans.arr[i] = obj->translation[i];
+
+  data->debug_cb (data->debug_cb_data, pose_type, &rot, &trans);
 }
 
 void softposit_free(softposit_data* data) {
@@ -749,6 +789,7 @@ void softposit_init(
       obj->pose2 = pose2;
       softposit_compute_rot_trans(data, obj);
       softposit_update_occlusion(data);
+      softposit_send_debug (data, obj, DEBUG_POSE_INITIAL);
 
       if (SPDEBUG_INIT) print_vec("init pose1", obj->pose1);
       if (SPDEBUG_INIT) print_vec("init pose2", obj->pose2);
@@ -805,6 +846,7 @@ void softposit_init(
         best_pose2 = pose2;
         if (SPDEBUG_LOOP) printf ("New best pose! best_sqsum = %f\n", best_sqsum);
       }
+      softposit_send_debug (data, obj, DEBUG_POSE_FINAL);
     }
 
     // printf("best_sqsum: %f\n", best_sqsum);
@@ -1180,6 +1222,7 @@ bool softposit_one(
       
 
       softposit_compute_rot_trans(data, obj);
+      softposit_send_debug (data, obj, DEBUG_POSE_INTERMEDIATE);
     }
 
     if (!some_zero) {

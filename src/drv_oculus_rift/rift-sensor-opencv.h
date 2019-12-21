@@ -8,13 +8,15 @@
 
 #include "rift.h"
 #include "rift-sensor-maths.h"
+#include "debug-common.h"
 
 #if HAVE_OPENCV
 bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 			   rift_led *leds, int num_leds,
 			   dmat3 *camera_matrix, double dist_coeffs[4],
 			   quatf *rot, vec3f *trans, int *num_leds_out,
-			   bool use_extrinsic_guess);
+			   bool use_extrinsic_guess,
+         DebugVisCallback debug_cb, void *cb_data);
 
 void rift_project_points(rift_led *leds, int num_led_pos,
   dmat3 *camera_matrix, double dist_coeffs[4],
@@ -26,7 +28,8 @@ bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 			   rift_led *leds, int num_leds,
 			   dmat3 *camera_matrix, double dist_coeffs[4],
 			   quatf *rot, vec3f *trans, int *num_leds_out,
-			   bool use_extrinsic_guess);
+			   bool use_extrinsic_guess,
+         DebugVisCallback debug_cb, void *cb_data);
 {
 	(void)blobs;
 	(void)num_blobs;
@@ -38,6 +41,8 @@ bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 	(void)trans;
 	(void)num_leds_out;
 	(void)use_extrinsic_guess;
+	(void)debug_cb;
+	(void)cb_data;
   return false;
 }
 #define rift_project_points(leds,num_led_pos,camera_matrix,dist_coeffs,rot,trans,out_points)

@@ -34,7 +34,8 @@ quatf_to_3x3 (cv::Mat &mat, quatf *me) {
 extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
     rift_led *leds, int num_led_pos,
     dmat3 *camera_matrix, double dist_coeffs[4],
-    quatf *rot, vec3f *trans, int *num_leds_out, bool use_extrinsic_guess)
+    quatf *rot, vec3f *trans, int *num_leds_out, bool use_extrinsic_guess,
+    DebugVisCallback debug_cb, void *cb_data)
 {
 	int i, j;
 	int num_leds = 0;
@@ -175,6 +176,7 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 				 
 	softposit_data *sp = softposit_new();
 	softposit_add_object(sp, obj);
+  softposit_set_debug(sp, debug_cb, cb_data);
 
 	softposit(sp, list_points2d_all_undistorted);
 

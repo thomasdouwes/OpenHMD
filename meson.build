@@ -263,6 +263,7 @@ if _examples.contains('softposit_test')
 	spt_sources = [
 		'examples/softposit/softposit_test.cpp',
 		'./src/drv_oculus_rift/softposit.cpp',
+	  'src/omath.c',
 	]
 
 	executable(
