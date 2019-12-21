@@ -15,8 +15,9 @@ using namespace std;
 #define SPDEBUG_DISTSQ_V (SPDEBUG_ALL && 0)
 #define SPDEBUG_L (SPDEBUG_ALL && 0)
 #define SPDEBUG_ASSIGN (SPDEBUG_ALL && 0)
+#define SPDEBUG_ASSIGN_NORM (SPDEBUG_ALL && 0)
 #define SPDEBUG_ROTTRANS (SPDEBUG_ALL && 0)
-#define SPDEBUG_OCCLUSION (SPDEBUG_ALL && 1)
+#define SPDEBUG_OCCLUSION (SPDEBUG_ALL && 0)
 #define SPDEBUG_LOOP (SPDEBUG_ALL && 0)
 #define SPDEBUG_KBWAIT (SPDEBUG_ALL && 0)
 #define SPDEBUG_DONE (SPDEBUG_ALL && 1)
@@ -412,9 +413,9 @@ assign_mat *assign_normalize(assign_mat *assign2, assign_mat *assign1, double sm
   assign = assign_prev;
   assign_prev = assign == assign1? assign2 : assign1;
 
-  if (SPDEBUG_ASSIGN) {
+  if (SPDEBUG_ASSIGN_NORM) {
     printf("assign_norm: %f  sum: %f  sqsum: %f  slack_sum: %f\n", assign_norm, assign->assign_sum, assign_sqsum(assign), assign->slack_sum);
-    // printf("assign_prev:\n"); assign_print(assign);
+    printf("assign_normalised:\n"); assign_print(assign_prev);
     printf("assign done after %d iterations:\n", iters); assign_print(assign);
   }
 
@@ -658,6 +659,29 @@ double softposit_squared_dists(
   double beta
 );
 
+static void
+pose_vectors_from_angles (float x_rot, float y_rot, float z_rot,
+  cv::Vec4d &pose1, cv::Vec4d &pose2)
+{
+  vec3f angles;
+  quatf orient;
+  float rot_mat[4][4];
+  vec3f zero = { { 0, 0, 0 } };
+  int i;
+
+  angles.x = x_rot * M_PI / 180.0;
+  angles.y = y_rot * M_PI / 180.0;
+  angles.z = z_rot * M_PI / 180.0;
+
+  oquatf_from_euler_angles(&orient, &angles);
+  oquatf_get_mat4x4(&orient, &zero, rot_mat);
+
+  for (i = 0; i < 3; i++) {
+    pose1[i] = rot_mat[0][i];
+    pose2[i] = rot_mat[1][i];
+  }
+}
+
 void softposit_init(
   softposit_data *data,
   const std::vector<cv::Point2f> &image_points,
@@ -708,7 +732,12 @@ void softposit_init(
       *objsize = max(len, *objsize);
     }
 
-    double dist = *objsize / *imgsize;
+    double dist = *objsize / *imgsize / 2; // FIXME: Measure objsize based on start pose
+
+    /* Use an alpha ~10% of the image search area
+     * to match points */
+    data->alpha = *imgsize / 10;
+
     if (SPDEBUG_INIT) {
       printf("x: min: %f  max: %f\n", xmin, xmax);
       printf("y: min: %f  max: %f\n", ymin, ymax);
@@ -716,6 +745,7 @@ void softposit_init(
       printf("obj %ld objsize: %f\n", o, *objsize);
       printf("dist: %f\n", dist);
       printf("data->alpha: %f\n", data->alpha);
+      printf("slack: %f\n", slack);
     }
 
 
@@ -744,45 +774,30 @@ void softposit_init(
     cv::Vec4d pose1, pose2;
 
     // try a bunch of different random poses, see which one matches best
-    for (size_t p = 0; p < 100; p++) {
-      // there's no guarantee that these will be orthogonal
-      // a better randomization that makes orthogonal vectors might help
-      do {
-        // Q1 = s(R1, Tx)
-        // Q2 = s(R2, Ty)
-        // s = f/Tz
-        randu(pose1, cv::Scalar(-1.0), cv::Scalar(1.0));
-        randu(pose2, cv::Scalar(-1.0), cv::Scalar(1.0));
+    for (size_t p = 0; p < 1/* *6*6 */; p++) {
+      float y_rot = 60 * (p % 6);
+      float z_rot = 60 * ((p / 6) % 6);
+      float x_rot = 60 * ((p / (6*6)) % 6);
 
-        // try constraining the pose to be mostly upright?
-#if 0
-        pose1[1] /= 1000.0;
-        pose2[0] /= 100.0;
-        pose2[1] = abs(pose2[1]);
-        pose2[2] /= 100.0;
+      // Q1 = s(R1, Tx)
+      // Q2 = s(R2, Ty)
+      // s = f/Tz
+      pose_vectors_from_angles (x_rot, y_rot, z_rot, pose1, pose2);
 
-        //hack: set to known values for test
-        pose1[0] = 0.0;
-        pose1[1] = 1.0;
-        pose1[2] = 0.0;
-        pose2[0] = 0.0;
-        pose2[1] = 1.0;
-        pose2[2] = 0.0;
-#endif
-        /* Normalise the pose and scale for approximate distance
-         * based on width/height of the image blob region */
-        pose1[3] = 0;
-        pose2[3] = 0;
-        pose1 /= cv::norm(pose1) * dist;
-        pose2 /= cv::norm(pose2) * dist;
-        pose1[3] = (xmax + xmin) / 2.0; // s*Tx
-        pose2[3] = (ymax + ymin) / 2.0; // s*Ty
-        if (!isfinite(pose1[0])) {
-          printf("Bad: %f %f %f\n", *imgsize, *objsize, dist);
-          print_vec("pose1", pose1);
-          print_vec("pose2", pose2);
-        }
-      } while (!isfinite(pose1[0]));
+      /* Normalise the pose and scale for approximate distance
+       * based on width/height of the image blob region */
+      pose1[3] = 0;
+      pose2[3] = 0;
+      pose1 /= cv::norm(pose1) * dist;
+      pose2 /= cv::norm(pose2) * dist;
+      pose1[3] = (xmax + xmin) / 2.0; // s*Tx
+      pose2[3] = (ymax + ymin) / 2.0; // s*Ty
+      if (!isfinite(pose1[0])) {
+        printf("Bad: %f %f %f\n", *imgsize, *objsize, dist);
+        print_vec("pose1", pose1);
+        print_vec("pose2", pose2);
+        continue;
+      }
 
       // printf("norms %d %d %d %d\n", isinf(norm1), isnan(norm1), isinf(norm2), isnan(norm2));
       obj->pose1 = pose1;
@@ -791,8 +806,12 @@ void softposit_init(
       softposit_update_occlusion(data);
       softposit_send_debug (data, obj, DEBUG_POSE_INITIAL);
 
-      if (SPDEBUG_INIT) print_vec("init pose1", obj->pose1);
-      if (SPDEBUG_INIT) print_vec("init pose2", obj->pose2);
+
+      if (SPDEBUG_INIT){
+        printf ("Start rotation of (x/y/z) %f,%f,%f degrees\n", x_rot, y_rot, z_rot);
+        print_vec("init pose1", obj->pose1);
+        print_vec("init pose2", obj->pose2);
+      }
 
       // initialize correction
       for (k = 0; k < data->num_object_points; k++) {
@@ -910,7 +929,8 @@ double softposit_squared_dists(
           // this is the formula from the paper, but if you use it then the
           // assign matrix never seems to try to assign any blobs to leds,
           // if you sum the squares of all the values, it is always near 0.
-          double x = -beta / data->alpha * (distsq - data->alpha);
+          // FIXME: Justify the magic division by (data->alpha/2)
+          double x = -beta / (data->alpha / 2) * (distsq - data->alpha);
           val = slack * exp(x);
           if (SPDEBUG_DISTSQ_V) printf("slack %f beta: %f  distsq: %f, alpha: %f\n", slack, beta, distsq, data->alpha);
           if (SPDEBUG_DISTSQ) printf("   dist %f exp(%f) -> %f\n", distsq, x, val);
