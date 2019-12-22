@@ -224,7 +224,7 @@ draw_projected_leds_at(rift_sensor_ctx *sensor_ctx, rift_leds *leds, struct rift
       }
     }
   }
-  printf("  vis: %d  matched: %d  blobs: %d\r", visible_leds, matched_visible_blobs, sensor_ctx->bwobs->num_led_blobs);
+  //printf("  vis: %d  matched: %d  blobs: %d\r", visible_leds, matched_visible_blobs, sensor_ctx->bwobs->num_led_blobs);
   bool good_pose_match = false;
   if (visible_leds > 4 && matched_visible_blobs > 4) {
     if (sensor_ctx->bwobs->num_led_blobs < 2 * matched_visible_blobs) {
@@ -269,7 +269,10 @@ draw_projected_leds_at(rift_sensor_ctx *sensor_ctx, rift_leds *leds, struct rift
           b->led_id = i;
         }
       }
-      draw_rgb_marker (dest, width, out_stride, height, x, y, 8, 8, color1);
+      if (color1 == 0xFF00FF) // HACK: Draw best pose bigger
+        draw_rgb_marker (dest, width, out_stride, height, x, y, 12, 12, color1);
+      else
+        draw_rgb_marker (dest, width, out_stride, height, x, y, 8, 8, color1);
     } else {
       draw_rgb_marker (dest, width, out_stride, height, x, y, 8, 8, 0x202000);
     }

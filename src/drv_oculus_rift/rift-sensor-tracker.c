@@ -18,12 +18,15 @@
 #include "rift-sensor-opencv.h"
 #include "debug_draw.h"
 
+#define DEBUG_POSES 1
 
 #define ASSERT_MSG(_v, label, ...) if(!(_v)){ fprintf(stderr, __VA_ARGS__); goto label; }
 #define min(a,b) ((a) < (b) ? (a) : (b))
 
 static uint8_t rift_sensor_tracker_get_led_pattern_phase (rift_tracker_ctx *ctx, uint64_t *ts);
+#if DEBUG_POSES
 static void pose_matching_debug_cb (rift_sensor_ctx *sensor_ctx, DebugPoseType pose_type, quatf *pose_orient, vec3f *trans);
+#endif
 
 static int tracker_process_blobs(rift_sensor_ctx *ctx)
 {
@@ -50,7 +53,14 @@ static int tracker_process_blobs(rift_sensor_ctx *ctx)
    */
   if (estimate_initial_pose(bwobs->blobs, bwobs->num_blobs, ctx->tracker->leds->points,
             ctx->tracker->leds->num_points, camera_matrix, dist_coeffs, &rot, &trans,
-            &num_leds, true, (DebugVisCallback) pose_matching_debug_cb, ctx)) {
+            &num_leds, true,
+#if DEBUG_POSES
+            (DebugVisCallback) pose_matching_debug_cb, ctx
+#else
+            NULL, NULL
+#endif
+             )) {
+
     kalman_pose_update (ctx->pose_filter, ctx->frame_sof_ts, &trans, &rot);
     kalman_pose_get_estimated (ctx->pose_filter, &ctx->pose_pos, &ctx->pose_orient);
 
@@ -309,6 +319,7 @@ static void new_frame_cb(struct rift_sensor_uvc_stream *stream)
 		ohmd_pw_debug_stream_push (sensor_ctx->debug_metadata, sensor_ctx->frame_sof_ts, "{ debug: \"debug!\" }");
 }
 
+#if DEBUG_POSES
 static void
 pose_matching_debug_cb (rift_sensor_ctx *sensor_ctx, DebugPoseType pose_type, quatf *pose_orient, vec3f *trans)
 {
@@ -348,6 +359,7 @@ pose_matching_debug_cb (rift_sensor_ctx *sensor_ctx, DebugPoseType pose_type, qu
 	ohmd_pw_video_stream_push (sensor_ctx->debug_vid, ohmd_monotonic_get(sensor_ctx->tracker->ohmd_ctx), sensor_ctx->stream.debug_frame);
   ohmd_sleep(1.0/60.0);
 }
+#endif
 
 static void rift_sensor_free (rift_sensor_ctx *sensor_ctx);
 
