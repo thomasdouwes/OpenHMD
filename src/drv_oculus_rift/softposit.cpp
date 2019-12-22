@@ -9,8 +9,8 @@ extern "C" {
 
 using namespace std;
 
-#define SPDEBUG_ALL 0
-#define SPDEBUG_INIT (SPDEBUG_ALL && 0)
+#define SPDEBUG_ALL 1
+#define SPDEBUG_INIT (SPDEBUG_ALL && 1)
 #define SPDEBUG_DISTSQ (SPDEBUG_ALL && 0)
 #define SPDEBUG_DISTSQ_V (SPDEBUG_ALL && 0)
 #define SPDEBUG_L (SPDEBUG_ALL && 0)
@@ -29,7 +29,7 @@ Object* softposit_new_object(std::vector<cv::Vec3d> points,
   obj->normals = normals;
   // pose vectors TODO: random or initial pose?
   obj->pose1 = cv::Vec4d(0.0f);
-  obj->pose2 = cv::Vec4d(0.0f); 
+  obj->pose2 = cv::Vec4d(0.0f);
   obj->translation = cv::Vec3d(0.0f);
   obj->rotation = cv::Mat(3, 3, CV_64F, cv::Scalar(0.0f));
 
@@ -247,7 +247,7 @@ void assign_print(assign_mat *mat) {
 // so that the colslack values stay somewhat proportional to the column's maximum value.
 void assign_rescale_rowslack(assign_mat *assign, assign_mat *assign_prev, double max_slack) {
   size_t y;
-  
+
   for (y = 0; y < assign->height; y++) {
     double old_slack = assign_rowslack(assign_prev, y);
     assign_set_rowslack(assign, y, old_slack);
@@ -487,8 +487,9 @@ assign_mat *assign_normalize2(assign_mat *assign2, assign_mat *assign1, double s
 // TODO: better name?
 // Convert assign to a pure 0/1 matrix by selecting as 1 all items
 // that are the max in both their row and column
-void assign_finish(assign_mat *assign) {
+void assign_finish(softposit_data *data, assign_mat *assign) {
   size_t x, y;
+  int matched_points = 0, expected = 0;
 
   // fill extra with 0
   for (x = 0; x < assign->width; x++) {
@@ -504,17 +505,26 @@ void assign_finish(assign_mat *assign) {
       assign_set_extra(assign, x, max(val, assign_extra(assign, x)));
     }
     assign_set_extra(assign, assign->width+y, rowmax);
+    if (data->occlusion_mask[y] == 0)
+      expected++;
   }
 
   for (y = 0; y < assign->height; y++) {
     double rowmax = assign_extra(assign, assign->width+y);
 
     for (x = 0; x < assign->width; x++) {
-      double colmax = assign_extra(assign, x);
       double val = assign_get(assign, x, y);
+
+      if (val < 1/1000000.0) {
+        printf(".");
+        continue;
+      }
+
+      double colmax = assign_extra(assign, x);
       if (val == rowmax && val == colmax) {
         printf("1");
         val = 1;
+        matched_points++;
       } else {
         if (val == rowmax) {
           printf("-");
@@ -529,6 +539,8 @@ void assign_finish(assign_mat *assign) {
     }
     printf("\n");
   }
+
+  printf ("%d of %d expected points matched\n", matched_points, expected);
 }
 
 cv::Vec4d v3_to_v4(cv::Vec3d v, float w) {
@@ -562,7 +574,7 @@ void print_mat(const char* name, cv::Mat* m) {
   }
 }
 
-static void softposit_compute_rot_trans(softposit_data *data, Object *obj);
+static bool softposit_compute_rot_trans(softposit_data *data, Object *obj);
 static void softposit_update_occlusion(softposit_data *data);
 
 softposit_data* softposit_new() {
@@ -580,6 +592,7 @@ softposit_data* softposit_new() {
   data->alpha = 0.01; // pow (10/715.0, 2.0); // Don't match blobs more than 50 pixels away
   data->num_object_points = 0;
 
+  data->last_distsqsum = 0.0;
   data->assign1 = assign_mat_new(0, 0);
   data->assign2 = assign_mat_new(0, 0);
   data->debug_cb = NULL;
@@ -734,9 +747,9 @@ void softposit_init(
 
     double dist = *objsize / *imgsize / 2; // FIXME: Measure objsize based on start pose
 
-    /* Use an alpha ~10% of the image search area
+    /* Use an alpha ~2% of the image search area
      * to match points */
-    data->alpha = *imgsize / 10;
+    data->alpha = *imgsize / 50;
 
     if (SPDEBUG_INIT) {
       printf("x: min: %f  max: %f\n", xmin, xmax);
@@ -767,17 +780,19 @@ void softposit_init(
       avgimgdistsq += best_idistsq;
     }
     avgimgdistsq /= (double)image_points.size();
-    //data->beta_final = -log(slack) / avgimgdistsq * 2;
 
     // TODO: Calculate pose vectors from initial rot/trans
 
     cv::Vec4d pose1, pose2;
 
-    // try a bunch of different random poses, see which one matches best
-    for (size_t p = 0; p < 1/* *6*6 */; p++) {
-      float y_rot = 60 * (p % 6);
-      float z_rot = 60 * ((p / 6) % 6);
-      float x_rot = 60 * ((p / (6*6)) % 6);
+    // Spin the object around a bunch of rotations, see which one matches best
+    const int step_angle = 90;
+    const int steps = 360 / step_angle; /* Steps around each axis */
+
+    for (size_t p = 0; p < steps /* *steps*steps */; p++) {
+      float y_rot = step_angle * (p % steps);
+      float x_rot = step_angle * ((p / steps) % steps);
+      float z_rot = step_angle * ((p / (steps*steps)) % steps);
 
       // Q1 = s(R1, Tx)
       // Q2 = s(R2, Ty)
@@ -802,10 +817,10 @@ void softposit_init(
       // printf("norms %d %d %d %d\n", isinf(norm1), isnan(norm1), isinf(norm2), isnan(norm2));
       obj->pose1 = pose1;
       obj->pose2 = pose2;
-      softposit_compute_rot_trans(data, obj);
+      if (!softposit_compute_rot_trans(data, obj))
+        continue; /* Invalid starting pose */
       softposit_update_occlusion(data);
       softposit_send_debug (data, obj, DEBUG_POSE_INITIAL);
-
 
       if (SPDEBUG_INIT){
         printf ("Start rotation of (x/y/z) %f,%f,%f degrees\n", x_rot, y_rot, z_rot);
@@ -822,28 +837,33 @@ void softposit_init(
       assign_set_all_slack(&data->assign1, slack);
       assign_set_all_slack(&data->assign2, slack);
 
-      data->beta_init = 0.445310; // 0.001; // -log(slack) / pow(*imgsize, 2.0); //avgdistsq;
+      // FIXME: Justify the magic division by (data->alpha/2) better
+      // This final beta is designed so that when an point->blob assignment is
+      // closer than half of the target range, then we evaluate > exp(1) = e
+      data->beta_final = 2/data->alpha;
+      data->beta_init = data->beta_final / 10;
 
-      double avgdistsq = softposit_squared_dists(data, image_points, slack, data->beta_init);
       // initial beta should make the exp(-beta*distsq) for average distsq the same as slack
       // beta_final should be calculated similar, but we will use the expected distsq at the end
       // of the algorithm. A good value for expected distsq is probably something related to the
       // avg/smallest distsq of every image point to its closest neighbor?
       if (SPDEBUG_INIT) {
-        printf("avgdistsq: %f   img: %f\n", avgdistsq, avgimgdistsq);
+        double avgdistsq = softposit_squared_dists(data, image_points, slack, data->beta_init);
         printf("beta_init: %f   final: %f\n", data->beta_init, data->beta_final);
         printf("beta_update: %f \n", data->beta_update);
+        printf("avgdistsq: %f   img: %f\n", avgdistsq, avgimgdistsq);
       }
       
       // deterministic annealing loop
-      double beta = data->beta_init; //0.0004; // anealing amount? TODO: Better name
+      double beta = data->beta_init;
       double beta_final = data->beta_final;
       while (beta < beta_final) {
         if (SPDEBUG_LOOP) printf("\n\nsoftposit loop start beta: %f\n", beta);
-        if (!softposit_one(data, image_points, slack, beta, *imgsize, *objsize))
+        if (!softposit_one(data, image_points, slack, beta, *imgsize, *objsize)) {
+          if (SPDEBUG_LOOP) printf("\n\nsoftposit loop aborting at beta: %f\n", beta);
           break;
+        }
         beta *= data->beta_update;
-        // break;
       }
 
       // run a few iterations of the loop just for fun
@@ -858,7 +878,7 @@ void softposit_init(
       // the values should make values near 1 stay the same, while values closer to 0
       // go way closer to 0. A sqsum value near the number of image points is probably
       // the best goal. 
-      avgdistsq = softposit_squared_dists(data, image_points, slack, 1);
+      double avgdistsq = data->last_distsqsum;
       if (avgdistsq < best_sqsum) {
         best_sqsum = avgdistsq;
         best_pose1 = obj->pose1;
@@ -875,7 +895,9 @@ void softposit_init(
 
     obj->pose1 = best_pose1;
     obj->pose2 = best_pose2;
-    softposit_compute_rot_trans(data, obj);
+    if (!softposit_compute_rot_trans(data, obj)) {
+      printf ("Invalid best pose! How did this happen??\n");
+    }
     softposit_send_debug (data, obj, DEBUG_POSE_FINAL);
   }
 }
@@ -891,6 +913,7 @@ double softposit_squared_dists(
   Object *obj;
 
   double distsqsum = 0;
+  int expected_points = 0;
 
   for (o = 0, k = 0; o < data->objects.size(); o++) {
     obj = data->objects[o];
@@ -919,6 +942,8 @@ double softposit_squared_dists(
       }
 
       if (data->occlusion_mask[k] == 0) {
+        expected_points++;
+
         if (SPDEBUG_DISTSQ_V) printf("distsq:");
         for (j = 0; j < image_points.size(); j++) {
           double val;
@@ -933,9 +958,8 @@ double softposit_squared_dists(
           // this is the formula from the paper, but if you use it then the
           // assign matrix never seems to try to assign any blobs to leds,
           // if you sum the squares of all the values, it is always near 0.
-          // FIXME: Justify the magic division by (data->alpha/2)
-          double x = -beta / (data->alpha / 2) * (distsq - data->alpha);
-          val = slack * exp(x);
+          double x = -beta * (distsq - data->alpha);
+          val = exp(x);
           if (SPDEBUG_DISTSQ_V) printf("slack %f beta: %f  distsq: %f, alpha: %f\n", slack, beta, distsq, data->alpha);
           if (SPDEBUG_DISTSQ) printf("   dist %f exp(%f) -> %f\n", distsq, x, val);
 
@@ -955,7 +979,9 @@ double softposit_squared_dists(
     printf("after distsq\n");
     assign_print(&data->assign1);
   }
-  return distsqsum / (data->assign1.width * data->assign1.height);
+
+  data->last_distsqsum = distsqsum / (data->assign1.width * expected_points);
+  return data->last_distsqsum;
 }
 
 cv::Mat softposit_compute_L_inv(
@@ -1078,7 +1104,7 @@ void make_orthogonal_v3_in_v4(cv::Vec4d &a, cv::Vec4d &b, bool unitlen) {
   b = v3_to_v4(b3, bv);
 }
 
-void softposit_compute_rot_trans(
+bool softposit_compute_rot_trans(
   softposit_data *data,
   Object *obj
 ) {
@@ -1097,7 +1123,7 @@ void softposit_compute_rot_trans(
   if (SPDEBUG_ROTTRANS) printf("s_inv: %.1e\n", s_inv);
   if (isinf(s_inv)) {
     printf("abort isinf(s_inv)\n");
-    abort();
+    return false;
   }
 
   cv::Vec3d r1 = v4_to_v3(obj->pose1);
@@ -1143,6 +1169,8 @@ void softposit_compute_rot_trans(
   obj->translation[1] = obj->pose2[3] * s_inv;
   obj->translation[2] = data->focal_length * s_inv; // TODO: why /2?
   if (SPDEBUG_ROTTRANS) print_vec("trans", obj->translation);
+
+  return true;
 }
 
 static void softposit_update_occlusion(softposit_data *data)
@@ -1157,14 +1185,24 @@ static void softposit_update_occlusion(softposit_data *data)
       cv::Mat rotated_pos = (obj->points[i].t() * obj->rotation) + trans.t();
       cv::Mat rotated_normal = (obj->normals[i].t() * obj->rotation);
 
-      /* If dot < 0, the point is visible. If it's > 0, the point is occluded - mask = 1 */
-      data->occlusion_mask[k] = (rotated_pos.dot(rotated_normal) > 0);
       if (SPDEBUG_OCCLUSION) {
         printf("Obj point %d\n", (int) k);
         print_mat ("pos", &rotated_pos);
         print_mat ("normal", &rotated_normal);
-        printf ("  occlusion = %d\n", data->occlusion_mask[k]);
       }
+
+      rotated_pos = rotated_pos / cv::norm(rotated_pos);
+      rotated_normal = rotated_normal / cv::norm(rotated_normal);
+
+      double dot = rotated_pos.dot(rotated_normal);
+
+      if (SPDEBUG_OCCLUSION) {
+        printf ("dot %f angle %f", dot, acosf(dot) * 180 / M_PI);
+      }
+      /* If dot < 0, the point is visible. If it's > 0, the point is occluded - mask = 1 */
+      data->occlusion_mask[k] = (dot > -0.25);
+
+      if (SPDEBUG_OCCLUSION) printf ("  occlusion = %d\n", data->occlusion_mask[k]);
     }
   }
 }
@@ -1245,7 +1283,8 @@ bool softposit_one(
       // }
       
 
-      softposit_compute_rot_trans(data, obj);
+      if (!softposit_compute_rot_trans(data, obj))
+        return false; /* Pose collapsed */
       softposit_send_debug (data, obj, DEBUG_POSE_INTERMEDIATE);
     }
 
@@ -1316,7 +1355,7 @@ void softposit(
   if (SPDEBUG_DONE) {
     printf("softposit done\n");
     printf("final assign:\n"); assign_print(&data->assign1);
-    assign_finish(&data->assign1);
+    assign_finish(data, &data->assign1);
     print_mat("rot", &data->objects[0]->rotation);
     print_vec("trans", data->objects[0]->translation);
   }

@@ -54,6 +54,7 @@ typedef struct {
                                    // dot product based on normals and current pose
   assign_mat assign1;
   assign_mat assign2;
+  double last_distsqsum;
 
   DebugVisCallback debug_cb;
   void *debug_cb_data;
