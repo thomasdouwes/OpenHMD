@@ -244,10 +244,20 @@ draw_projected_leds_at(rift_sensor_ctx *sensor_ctx, rift_leds *leds, struct rift
 
     oquatf_get_rotated(rot, &leds->points[i].pos, &position);
     ovec3f_add (trans, &position, &position);
+    ovec3f_normalize_me (&position);
 
     oquatf_get_rotated(rot, &leds->points[i].dir, &normal);
+    ovec3f_normalize_me (&normal);
+
     facing_dot = ovec3f_get_dot (&position, &normal);
-    if (facing_dot < 0) {
+#if DUMP_LEDS
+    printf ("LED %d dot product %f\n", i, facing_dot);
+    printf ("Pos %f %f %f normal %f %f %f\n",
+        position.x, position.y, position.z,
+        normal.x, normal.y, normal.z);
+#endif
+
+    if (facing_dot < -0.5) {
       /* Camera facing */
       if (good_pose_match) {
         /* Back project LED ids into blobs if we find them and the dot product
