@@ -314,22 +314,33 @@ pose_matching_debug_cb (rift_sensor_ctx *sensor_ctx, DebugPoseType pose_type, qu
 {
   static quatf init_orient;
   static vec3f init_trans;
+  static quatf best_orient;
+  static vec3f best_trans;
 
 	if (sensor_ctx->debug_vid == NULL)
     return;
 
   /* Draw blobs and the current pose (blue) */
 	draw_blob_debug_stuff(sensor_ctx, &sensor_ctx->stream);
-	draw_projected_leds_at(sensor_ctx, sensor_ctx->tracker->leds, &sensor_ctx->stream, &sensor_ctx->pose_orient, &sensor_ctx->pose_pos, 0xFF0000);
+  if (oquatf_get_length (&sensor_ctx->pose_orient) > 0)
+	  draw_projected_leds_at(sensor_ctx, sensor_ctx->tracker->leds, &sensor_ctx->stream, &sensor_ctx->pose_orient, &sensor_ctx->pose_pos, 0xFF0000);
 
   /* Draw the initial pose, or else draw the initial pose (green) + the intermediate guess posed (red) */
   if (pose_type == DEBUG_POSE_INITIAL) {
 	  draw_projected_leds_at(sensor_ctx, sensor_ctx->tracker->leds, &sensor_ctx->stream, pose_orient, trans, 0x00FF00);
     init_orient = *pose_orient;
     init_trans = *trans;
-  } else {
-	  draw_projected_leds_at(sensor_ctx, sensor_ctx->tracker->leds, &sensor_ctx->stream, &init_orient, &init_trans, 0x00FF00);
-	  draw_projected_leds_at(sensor_ctx, sensor_ctx->tracker->leds, &sensor_ctx->stream, pose_orient, trans, 0x0000FF);
+    memset (&best_orient, 0, sizeof (quatf));
+  } else if (pose_type == DEBUG_POSE_BEST) {
+    best_orient = *pose_orient;
+    best_trans = *trans;
+  }
+  
+  if (pose_type != DEBUG_POSE_INITIAL) {
+	  draw_projected_leds_at(sensor_ctx, sensor_ctx->tracker->leds, &sensor_ctx->stream, &init_orient, &init_trans, 0x008000);
+	  draw_projected_leds_at(sensor_ctx, sensor_ctx->tracker->leds, &sensor_ctx->stream, pose_orient, trans, 0x000080);
+    if (oquatf_get_length (&best_orient) > 0)
+	    draw_projected_leds_at(sensor_ctx, sensor_ctx->tracker->leds, &sensor_ctx->stream, &best_orient, &best_trans, 0xFF00FF);
   }
 
 	ohmd_pw_video_stream_push (sensor_ctx->debug_vid, ohmd_monotonic_get(sensor_ctx->tracker->ohmd_ctx), sensor_ctx->stream.debug_frame);

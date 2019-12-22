@@ -861,11 +861,14 @@ void softposit_init(
       avgdistsq = softposit_squared_dists(data, image_points, slack, 1);
       if (avgdistsq < best_sqsum) {
         best_sqsum = avgdistsq;
-        best_pose1 = pose1;
-        best_pose2 = pose2;
-        if (SPDEBUG_LOOP) printf ("New best pose! best_sqsum = %f\n", best_sqsum);
+        best_pose1 = obj->pose1;
+        best_pose2 = obj->pose2;
+        if (SPDEBUG_DONE) {
+          printf ("New best pose! best_sqsum = %f\n", best_sqsum);
+          assign_finish(data, &data->assign1);
+        }
+        softposit_send_debug (data, obj, DEBUG_POSE_BEST);
       }
-      softposit_send_debug (data, obj, DEBUG_POSE_FINAL);
     }
 
     // printf("best_sqsum: %f\n", best_sqsum);
@@ -873,6 +876,7 @@ void softposit_init(
     obj->pose1 = best_pose1;
     obj->pose2 = best_pose2;
     softposit_compute_rot_trans(data, obj);
+    softposit_send_debug (data, obj, DEBUG_POSE_FINAL);
   }
 }
 
