@@ -312,9 +312,9 @@ static void new_frame_cb(struct rift_sensor_uvc_stream *stream)
 static void
 pose_matching_debug_cb (rift_sensor_ctx *sensor_ctx, DebugPoseType pose_type, quatf *pose_orient, vec3f *trans)
 {
-  static quatf init_orient;
+  static quatf init_orient = { { 0, }};
   static vec3f init_trans;
-  static quatf best_orient;
+  static quatf best_orient = { { 0, }};
   static vec3f best_trans;
 
 	if (sensor_ctx->debug_vid == NULL)
@@ -330,10 +330,12 @@ pose_matching_debug_cb (rift_sensor_ctx *sensor_ctx, DebugPoseType pose_type, qu
 	  draw_projected_leds_at(sensor_ctx, sensor_ctx->tracker->leds, &sensor_ctx->stream, pose_orient, trans, 0x00FF00);
     init_orient = *pose_orient;
     init_trans = *trans;
-    memset (&best_orient, 0, sizeof (quatf));
   } else if (pose_type == DEBUG_POSE_BEST) {
     best_orient = *pose_orient;
     best_trans = *trans;
+  }
+  else if (pose_type == DEBUG_POSE_FINAL) {
+    memset (&best_orient, 0, sizeof (quatf));
   }
   
   if (pose_type != DEBUG_POSE_INITIAL) {
