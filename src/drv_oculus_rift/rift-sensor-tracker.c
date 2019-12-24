@@ -240,8 +240,9 @@ static void new_frame_cb(struct rift_sensor_uvc_stream *stream)
         }
       }
 
-      if (visible_leds > 4 && matched_visible_blobs > 0) {
-        if (sensor_ctx->bwobs->num_led_blobs < 2 * matched_visible_blobs) {
+      if (visible_leds > 4 && matched_visible_blobs > 4) {
+        if (visible_leds < 2 * matched_visible_blobs) {
+
           good_pose_match = true;
           printf ("Found good pose match - %u LEDs matched %u visible ones\n",
               matched_visible_blobs, visible_leds);
