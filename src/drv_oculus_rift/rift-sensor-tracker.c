@@ -44,6 +44,9 @@ static int tracker_process_blobs(rift_sensor_ctx *ctx)
     trans = ctx->tracker->devices[0].fusion->world_position;
     // Metres to micrometres
     ovec3f_multiply_scalar (&trans, 1000000.0, &trans);
+    // HACK : Reset our local orientation based on the sensor fusion
+    // as the pose prior for the estimate_initial_pose() call
+    ctx->pose_orient = rot;
   }
 
 	int num_leds = 0;

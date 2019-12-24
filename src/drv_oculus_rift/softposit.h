@@ -58,10 +58,13 @@ typedef struct {
 
   DebugVisCallback debug_cb;
   void *debug_cb_data;
+
+  quatf pose_prior;
 } softposit_data;
 
 softposit_data* softposit_new();
 
+void softposit_set_pose_prior(softposit_data *data, quatf *orient);
 void softposit_set_debug(softposit_data *data, DebugVisCallback debug_cb, void *cb_data);
 
 void softposit_free(softposit_data* data);

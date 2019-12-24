@@ -177,6 +177,7 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 	softposit_data *sp = softposit_new();
 	softposit_add_object(sp, obj);
   softposit_set_debug(sp, debug_cb, cb_data);
+  softposit_set_pose_prior(sp, rot);
 
 	softposit(sp, list_points2d_all_undistorted);
 

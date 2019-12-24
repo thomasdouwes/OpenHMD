@@ -1,11 +1,10 @@
 // Copyright 2019, Google.
 
-#include "softposit.h"
-
 extern "C" {
 #include "../omath.h"
 };
 
+#include "softposit.h"
 
 using namespace std;
 
@@ -598,7 +597,14 @@ softposit_data* softposit_new() {
   data->debug_cb = NULL;
   data->debug_cb_data = NULL;
 
+  memset (&data->pose_prior, 0, sizeof (quatf));
+
   return data;
+}
+
+void softposit_set_pose_prior(softposit_data *data, quatf *orient)
+{
+  data->pose_prior = *orient;
 }
 
 void softposit_set_debug(softposit_data *data, DebugVisCallback debug_cb, void *cb_data)
@@ -673,12 +679,12 @@ double softposit_squared_dists(
 );
 
 static void
-pose_vectors_from_angles (float x_rot, float y_rot, float z_rot,
+pose_vectors_from_angles (softposit_data *data, float x_rot, float y_rot, float z_rot,
   cv::Vec4d &pose1, cv::Vec4d &pose2)
 {
   vec3f angles;
   quatf orient;
-  float rot_mat[4][4];
+  mat4x4f rot_mat;
   vec3f zero = { { 0, 0, 0 } };
   int i;
 
@@ -687,11 +693,25 @@ pose_vectors_from_angles (float x_rot, float y_rot, float z_rot,
   angles.z = z_rot * M_PI / 180.0;
 
   oquatf_from_euler_angles(&orient, &angles);
-  oquatf_get_mat4x4(&orient, &zero, rot_mat);
+  oquatf_get_mat4x4(&orient, &zero, rot_mat.m);
+
+  if (oquatf_get_length (&data->pose_prior) > 0) {
+    /* We have a pose prior, rotate to match it */
+    mat4x4f prior_rot_mat, tmp;
+
+    printf ("Using pose prior %f %f %f %f\n",
+        data->pose_prior.w,
+        data->pose_prior.z,
+        data->pose_prior.y,
+        data->pose_prior.z);
+    oquatf_get_mat4x4(&data->pose_prior, &zero, prior_rot_mat.m);
+    omat4x4f_mult(&rot_mat, &prior_rot_mat, &tmp);
+    memcpy (&rot_mat, &tmp, sizeof(tmp));
+  }
 
   for (i = 0; i < 3; i++) {
-    pose1[i] = rot_mat[0][i];
-    pose2[i] = rot_mat[1][i];
+    pose1[i] = rot_mat.m[0][i];
+    pose2[i] = rot_mat.m[1][i];
   }
 }
 
@@ -786,8 +806,8 @@ void softposit_init(
     cv::Vec4d pose1, pose2;
 
     // Spin the object around a bunch of rotations, see which one matches best
-    const int step_angle = 90;
-    const int steps = 360 / step_angle; /* Steps around each axis */
+    const int step_angle = 45;
+    const int steps = 1; // 360 / step_angle; /* Steps around each axis */
 
     for (size_t p = 0; p < steps /* *steps*steps */; p++) {
       float y_rot = step_angle * (p % steps);
@@ -797,7 +817,7 @@ void softposit_init(
       // Q1 = s(R1, Tx)
       // Q2 = s(R2, Ty)
       // s = f/Tz
-      pose_vectors_from_angles (x_rot, y_rot, z_rot, pose1, pose2);
+      pose_vectors_from_angles (data, x_rot, y_rot, z_rot, pose1, pose2);
 
       /* Normalise the pose and scale for approximate distance
        * based on width/height of the image blob region */
@@ -841,7 +861,7 @@ void softposit_init(
       // This final beta is designed so that when an point->blob assignment is
       // closer than half of the target range, then we evaluate > exp(1) = e
       data->beta_final = 2/data->alpha;
-      data->beta_init = data->beta_final / 10;
+      data->beta_init = data->beta_final / 2;
 
       // initial beta should make the exp(-beta*distsq) for average distsq the same as slack
       // beta_final should be calculated similar, but we will use the expected distsq at the end
