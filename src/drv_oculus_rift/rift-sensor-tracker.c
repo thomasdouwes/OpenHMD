@@ -342,7 +342,7 @@ pose_matching_debug_cb (rift_sensor_ctx *sensor_ctx, DebugPoseType pose_type, qu
 
   /* Draw the initial pose, or else draw the initial pose (green) + the intermediate guess posed (red) */
   if (pose_type == DEBUG_POSE_INITIAL) {
-	  draw_projected_leds_at(sensor_ctx, sensor_ctx->tracker->leds, &sensor_ctx->stream, pose_orient, trans, 0x00FF00);
+	  draw_projected_leds_at(sensor_ctx, sensor_ctx->tracker->leds, &sensor_ctx->stream, pose_orient, trans, 0xFFFF00);
     init_orient = *pose_orient;
     init_trans = *trans;
   } else if (pose_type == DEBUG_POSE_BEST) {
@@ -354,8 +354,8 @@ pose_matching_debug_cb (rift_sensor_ctx *sensor_ctx, DebugPoseType pose_type, qu
   }
   
   if (pose_type != DEBUG_POSE_INITIAL) {
-	  draw_projected_leds_at(sensor_ctx, sensor_ctx->tracker->leds, &sensor_ctx->stream, &init_orient, &init_trans, 0x008000);
-	  draw_projected_leds_at(sensor_ctx, sensor_ctx->tracker->leds, &sensor_ctx->stream, pose_orient, trans, 0x000080);
+	  draw_projected_leds_at(sensor_ctx, sensor_ctx->tracker->leds, &sensor_ctx->stream, &init_orient, &init_trans, 0x808000);
+	  draw_projected_leds_at(sensor_ctx, sensor_ctx->tracker->leds, &sensor_ctx->stream, pose_orient, trans, 0x0000FF);
     if (oquatf_get_length (&best_orient) > 0)
 	    draw_projected_leds_at(sensor_ctx, sensor_ctx->tracker->leds, &sensor_ctx->stream, &best_orient, &best_trans, 0xFF00FF);
   }
