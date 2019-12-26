@@ -9,7 +9,7 @@ extern "C" {
 using namespace std;
 
 #define SPDEBUG_ALL 1
-#define SPDEBUG_INIT (SPDEBUG_ALL && 1)
+#define SPDEBUG_INIT (SPDEBUG_ALL && 0)
 #define SPDEBUG_DISTSQ (SPDEBUG_ALL && 0)
 #define SPDEBUG_DISTSQ_V (SPDEBUG_ALL && 0)
 #define SPDEBUG_L (SPDEBUG_ALL && 0)
@@ -17,6 +17,7 @@ using namespace std;
 #define SPDEBUG_ASSIGN_NORM (SPDEBUG_ALL && 0)
 #define SPDEBUG_ROTTRANS (SPDEBUG_ALL && 0)
 #define SPDEBUG_OCCLUSION (SPDEBUG_ALL && 0)
+#define SPDEBUG_CORRECTION (SPDEBUG_ALL && 0)
 #define SPDEBUG_LOOP (SPDEBUG_ALL && 0)
 #define SPDEBUG_KBWAIT (SPDEBUG_ALL && 0)
 #define SPDEBUG_DONE (SPDEBUG_ALL && 1)
@@ -241,40 +242,6 @@ void assign_print(assign_mat *mat) {
   printf("\n");
 }
 
-// When normalizing, say, all the rows, all the main values and all the rowslack values get
-// scaled, leaving the colslack values out. This rescales those values based on how the sum changed
-// so that the colslack values stay somewhat proportional to the column's maximum value.
-void assign_rescale_rowslack(assign_mat *assign, assign_mat *assign_prev, double max_slack) {
-  size_t y;
-
-  for (y = 0; y < assign->height; y++) {
-    double old_slack = assign_rowslack(assign_prev, y);
-    assign_set_rowslack(assign, y, old_slack);
-    double sum = assign_rowsum(assign, y);
-    double old_sum = assign->data[_assign_extra(assign, y)];
-    double slack = old_slack;
-    if (abs(old_sum - old_slack) > 0.00001) // avoid divide by 0 if slack is the only value in the row
-      slack = old_slack * (sum - old_slack) / (old_sum - old_slack);
-    // printf("scale slack: %f %f %f %f\n", old_sum, sum, old_slack, slack);
-    assign_set_rowslack(assign, y, slack);
-  }
-}
-
-void assign_rescale_colslack(assign_mat *assign, assign_mat *assign_prev, double max_slack) {
-  size_t x;
-  
-  for (x = 0; x < assign->width; x++) {
-      double old_slack = assign_colslack(assign_prev, x);
-      double sum = assign_colsum(assign, x);
-      double old_sum = assign->data[_assign_extra(assign, x)];
-      double slack = old_slack;
-      if (abs(old_sum - old_slack) > 0.0001)
-        slack = old_slack * (sum - old_slack) / (old_sum - old_slack);
-      // printf("scale slack: %f %f %f %f\n", old_sum, sum, old_slack, slack);
-      assign_set_colslack(assign, x, slack);
-    }
-}
-
 void assign_copy_colsum_to_extra(assign_mat *assign, assign_mat *assign_from) {
   size_t x;
   
@@ -290,7 +257,7 @@ void assign_copy_rowsum_to_extra(assign_mat *assign, assign_mat *assign_from) {
   }
 }
 
-double assign_normalize_cols(assign_mat *assign, assign_mat *assign_prev, double max_slack) {
+double assign_normalize_cols(assign_mat *assign, assign_mat *assign_prev) {
   size_t x, y;
 
   double sumsum = 0;
@@ -308,33 +275,29 @@ double assign_normalize_cols(assign_mat *assign, assign_mat *assign_prev, double
 
     double val = assign_colslack(assign_prev, x);
     val *= inv_sum;
-    // val = min(val, max_slack);
     assign_set_colslack(assign, x, val);
   }
 
   return sumsum;
 }
 
-double assign_normalize_rows(assign_mat *assign, assign_mat *assign_prev, double max_slack) {
+double assign_normalize_rows(assign_mat *assign_to, assign_mat *assign_from) {
   size_t x, y;
 
   double sumsum = 0;
   
-  for (y = 0; y < assign->height; y++) {
-    double sum = assign_rowsum(assign, y);
+  for (y = 0; y < assign_to->height; y++) {
+    double sum = assign_rowsum(assign_from, y);
     sumsum += sum;
     double inv_sum = 1.0 / sum;
-    // printf("assign_rowsum(assign, y): %f\n", assign_rowsum(assign, y));
-    // printf("inv_sum: %f\n", inv_sum);
-    for (x = 0; x < assign->width; x++) {
-      double val = assign_get(assign_prev, x, y) * inv_sum;
-      assign_set(assign, x, y, val);
+    for (x = 0; x < assign_to->width; x++) {
+      double val = assign_get(assign_from, x, y) * inv_sum;
+      assign_set(assign_to, x, y, val);
     }
 
-    double val = assign_rowslack(assign, y);
+    double val = assign_rowslack(assign_from, y);
     val *= inv_sum;
-    // val = min(val, max_slack);
-    assign_set_rowslack(assign, y, val);
+    assign_set_rowslack(assign_to, y, val);
   }
 
   return sumsum;
@@ -365,7 +328,7 @@ double assign_norm_diff(assign_mat *assign, assign_mat *assign_prev) {
 }
 
 // softassign
-assign_mat *assign_normalize(assign_mat *assign2, assign_mat *assign1, double small, double max_slack) {
+assign_mat *assign_normalize(assign_mat *assign2, assign_mat *assign1, double small) {
   // Sinkhorn's method?
   double assign_norm = 0, last_assign_norm = 0;
   assign_mat *assign = assign2;
@@ -377,17 +340,12 @@ assign_mat *assign_normalize(assign_mat *assign2, assign_mat *assign1, double sm
 
     if (SPDEBUG_ASSIGN > 1) { printf("assign.0:\n"); assign_print(assign_prev); }
 
-    // save a copy of what rowsum is before normalizing
-    // assign_copy_rowsum_to_extra(assign, assign_prev);
-    assign_normalize_cols(assign, assign_prev, max_slack);
+    assign_normalize_cols(assign, assign_prev);
     if (SPDEBUG_ASSIGN > 1) { printf("assign.2:\n"); assign_print(assign); }
-    // assign_rescale_rowslack(assign, assign_prev, max_slack);
-    // printf("assign.5:\n"); assign_print(assign);
 
     // first normalize copied from prev into assign, so we have to
     // read rowsums from assign and write to assign here
-    // assign_copy_colsum_to_extra(assign, assign);
-    assign_normalize_rows(assign, assign, max_slack);
+    assign_normalize_rows(assign, assign);
     if (SPDEBUG_ASSIGN > 1) { printf("assign.8:\n"); assign_print(assign); }
     // assign_rescale_colslack(assign, assign, max_slack);
     // printf("assign.9:\n"); assign_print(assign);
@@ -414,8 +372,8 @@ assign_mat *assign_normalize(assign_mat *assign2, assign_mat *assign1, double sm
 
   if (SPDEBUG_ASSIGN_NORM) {
     printf("assign_norm: %f  sum: %f  sqsum: %f  slack_sum: %f\n", assign_norm, assign->assign_sum, assign_sqsum(assign), assign->slack_sum);
+    printf("assign normalisation done after %d iterations:\n", iters);
     printf("assign_normalised:\n"); assign_print(assign_prev);
-    printf("assign done after %d iterations:\n", iters); assign_print(assign);
   }
 
   return assign_prev;
@@ -558,7 +516,7 @@ void print_vec(const char* name, cv::Vec3d v) {
 void print_vector(const char* name, std::vector<double> v) {
   printf("%s: [", name);
   for (size_t i = 0; i < v.size(); i++) {
-      printf("% .2e ", v[i]);
+      printf("% .4e ", v[i]);
   }
     printf("]\n");
 }
@@ -567,7 +525,7 @@ void print_mat(const char* name, cv::Mat* m) {
   for (int i = 0; i < m->rows; i++) {
     printf("    ");
     for (int j = 0; j < m->cols; j++) {
-      printf("% .3f ", m->at<double>(i, j));
+      printf("% .3g ", m->at<double>(i, j));
     }
     printf("\n");
   }
@@ -722,7 +680,7 @@ void softposit_init(
   double *imgsize,
   double *objsize
 ) {
-  size_t i, o, j, k, jj;
+  size_t i, o, j, k;
   Object *obj;
 
   double x, y;
@@ -753,6 +711,8 @@ void softposit_init(
     data->occlusion_mask[k] = 0;
   }
 
+  // FIXME: Measure objsize by projecting the bounding
+  // box of the start pose
   for (o = 0, k = 0; o < data->objects.size(); o++) {
     obj = data->objects[o];
 
@@ -765,11 +725,11 @@ void softposit_init(
       *objsize = max(len, *objsize);
     }
 
-    double dist = *objsize / *imgsize / 2; // FIXME: Measure objsize based on start pose
+    double dist = *objsize / *imgsize / 2;
 
-    /* Use an alpha ~2% of the image search area
+    /* Use an alpha ~5% of the image search area
      * to match points */
-    data->alpha = *imgsize / 50;
+    data->alpha = *imgsize / 20;
 
     if (SPDEBUG_INIT) {
       printf("x: min: %f  max: %f\n", xmin, xmax);
@@ -781,33 +741,12 @@ void softposit_init(
       printf("slack: %f\n", slack);
     }
 
-
-    // avg distsq of every image point to its closest neighbor
-    // TODO: Better algo than this O(n^2)?
-    double avgimgdistsq = 0;
-    for (j = 0; j < image_points.size(); j++) {
-      x = image_points[j].x;
-      y = image_points[j].y;
-      double best_idistsq = INFINITY;
-      for (jj = 0; jj < image_points.size(); jj++) {
-        if (j == jj) continue;
-
-        double idistsq = pow(x - image_points[jj].x, 2.0) + pow(y - image_points[jj].y, 2.0);
-        if (idistsq < best_idistsq) {
-          best_idistsq = idistsq;
-        }
-      }
-      avgimgdistsq += best_idistsq;
-    }
-    avgimgdistsq /= (double)image_points.size();
-
-    // TODO: Calculate pose vectors from initial rot/trans
-
+    // Calculate pose vectors from initial rot/trans
     cv::Vec4d pose1, pose2;
 
     // Spin the object around a bunch of rotations, see which one matches best
-    const int step_angle = 45;
-    const int steps = 1; // 360 / step_angle; /* Steps around each axis */
+    const int step_angle = 60;
+    const int steps = 360 / step_angle; /* Steps around each axis */
 
     for (size_t p = 0; p < steps /* *steps*steps */; p++) {
       float y_rot = step_angle * (p % steps);
@@ -859,19 +798,18 @@ void softposit_init(
 
       // FIXME: Justify the magic division by (data->alpha/2) better
       // This final beta is designed so that when an point->blob assignment is
-      // closer than half of the target range, then we evaluate > exp(1) = e
-      data->beta_final = 2/data->alpha;
-      data->beta_init = data->beta_final / 2;
+      // closer than 1/5th of the target range, then we evaluate > exp(1) = e
+      data->beta_final = 5.0/data->alpha;
+      data->beta_init = data->beta_final/10;
+      data->beta_update = 1.2;
 
       // initial beta should make the exp(-beta*distsq) for average distsq the same as slack
       // beta_final should be calculated similar, but we will use the expected distsq at the end
       // of the algorithm. A good value for expected distsq is probably something related to the
       // avg/smallest distsq of every image point to its closest neighbor?
       if (SPDEBUG_INIT) {
-        double avgdistsq = softposit_squared_dists(data, image_points, slack, data->beta_init);
         printf("beta_init: %f   final: %f\n", data->beta_init, data->beta_final);
         printf("beta_update: %f \n", data->beta_update);
-        printf("avgdistsq: %f   img: %f\n", avgdistsq, avgimgdistsq);
       }
       
       // deterministic annealing loop
@@ -975,19 +913,19 @@ double softposit_squared_dists(
           
           distsqsum += distsq;
           
-          // this is the formula from the paper, but if you use it then the
-          // assign matrix never seems to try to assign any blobs to leds,
-          // if you sum the squares of all the values, it is always near 0.
           double x = -beta * (distsq - data->alpha);
-          val = exp(x);
-          if (SPDEBUG_DISTSQ_V) printf("slack %f beta: %f  distsq: %f, alpha: %f\n", slack, beta, distsq, data->alpha);
-          if (SPDEBUG_DISTSQ) printf("   dist %f exp(%f) -> %f\n", distsq, x, val);
+          val = slack * pow(exp(x), 2.0);
+          if (SPDEBUG_DISTSQ) {
+            printf("   %d: ", (int) j);
+            if (SPDEBUG_DISTSQ_V) printf("slack %f beta: %f  distsq: %f, alpha: %f ", slack, beta, distsq, data->alpha);
+            printf("dist %f exp(%f) -> %f\n", distsq, x, val);
+          }
 
           assign_set(&data->assign1, j, k, val);
         }
       }
       else {
-        if (SPDEBUG_DISTSQ) printf("occluded\n");
+        if (SPDEBUG_DISTSQ) printf("   occluded\n");
         for (j = 0; j < image_points.size(); j++) {
           assign_set(&data->assign1, j, k, 0.0);
         }
@@ -1034,18 +972,6 @@ cv::Mat softposit_compute_L_inv(
   if (SPDEBUG_L) print_mat("L_inv", &L_inv);
 
   return L_inv;
-}
-
-bool randomize_vec3_if_near_zero(cv::Vec4d &v) {
-  if (abs(v[0]) + abs(v[1]) + abs(v[2]) < 0.001) {
-    printf("randomizing vec3\n");
-    v[0] = rand()%1000 / 100.0;
-    v[1] = rand()%1000 / 100.0;
-    v[2] = rand()%1000 / 100.0;
-    v[3] = rand()%1000 / 100.0;
-    return true;
-  }
-  return false;
 }
 
 bool softposit_update_pose_vectors(
@@ -1128,17 +1054,17 @@ bool softposit_compute_rot_trans(
   softposit_data *data,
   Object *obj
 ) {
-  double n1 = cv::norm(v4_to_v3(obj->pose1));
-  double n2 = cv::norm(v4_to_v3(obj->pose2));
+  cv::Vec3d r1 = v4_to_v3(obj->pose1);
+  cv::Vec3d r2 = v4_to_v3(obj->pose2);
+  double n1 = cv::norm(r1);
+  double n2 = cv::norm(r2);
   if (SPDEBUG_ROTTRANS > 2) {
-    printf("n1: %f, n2: %f\n", n1, n2);
-    printf("n1 * n2: %f\n", n1 * n2);
-    printf("sqrt(n1 * n2): %f\n", sqrt(n1 * n2));
+    printf("n1: %g, n2: %g\n", n1, n2);
+    printf("n1 * n2: %g\n", n1 * n2);
+    printf("sqrt(n1 * n2): %g\n", sqrt(n1 * n2));
   }
-  double s_inv = 1.0/sqrt(
-    cv::norm(v4_to_v3(obj->pose1)) *
-    cv::norm(v4_to_v3(obj->pose2))
-  );
+  //double s_inv = 1.0/n1; // The 2002 SoftPOSIT paper uses this different metric to the original here
+  double s_inv = 1.0/sqrt(n1 * n2);
 
   if (SPDEBUG_ROTTRANS) printf("s_inv: %.1e\n", s_inv);
   if (isinf(s_inv)) {
@@ -1146,10 +1072,8 @@ bool softposit_compute_rot_trans(
     return false;
   }
 
-  cv::Vec3d r1 = v4_to_v3(obj->pose1);
   // r1 /= cv::norm(r1);
   // printf("r1 (%f) = ", cv::norm(r1)); print_vec("pose1 * s_inv", r1);
-  cv::Vec3d r2 = v4_to_v3(obj->pose2);
   // r2 /= cv::norm(r2);
   // printf("r2 (%f) = ", cv::norm(r2)); print_vec("pose2 * s_inv", r2);
   cv::Vec3d r3 = make_orthogonal_v3(r1, r2, true);
@@ -1162,7 +1086,7 @@ bool softposit_compute_rot_trans(
   // r1a = r2.cross(r3);
   // r1a /= cv::norm(r1a);
   // r2a = r3.cross(r1);
-  // r2a /= cv::norm(r2a);
+  // r2a /= cv:: Nj=1 m jk Nj=1 m jknorm(r2a);
   // // printf("%f ", r1.dot(r1a)); print_vec("r1a", r1a);
   // // printf("%f ", r2.dot(r2a)); print_vec("r2a", r2a);
   // r1 = (r1 + r1a)/2;
@@ -1236,26 +1160,10 @@ void softposit_compute_correction(
   for (o = 0, k = 0; o < data->objects.size(); o++) {
     obj = data->objects[o];
     for (i = 0; i < obj->points.size(); i++, k++) {
-      data->correction[k] = cv::Vec3d(obj->rotation.row(2)).dot(obj->points[i]/obj->translation[2]) + 1;
+      data->correction[k] = cv::Vec3d(obj->rotation.row(2)).dot(obj->points[i])/obj->translation[2] + 1;
     }
   }
-}
-
-assign_mat *softposit_one_setup(
-  softposit_data *data,
-  const std::vector<cv::Point2f> &image_points,
-  double slack,
-  double beta
-) {
-    // is this a good idea?
-    //assign_set_all_slack(&data->assign1, slack /*min(slack, beta * 2)*/);
-
-    double avgdistsq = softposit_squared_dists(data, image_points, slack, beta);
-    if (SPDEBUG_LOOP) printf("avgdistsq: %f\n", avgdistsq);
-
-    // printf("assign1:\n"); assign_print(&data->assign1);
-
-    return assign_normalize(&data->assign2, &data->assign1, data->small, 1 /*beta * 2*/);
+  if (SPDEBUG_CORRECTION) print_vector("correction", data->correction);
 }
 
 bool softposit_one(
@@ -1266,7 +1174,9 @@ bool softposit_one(
   double imgsize,
   double objsize
 ) {
-    assign_mat *assign = softposit_one_setup(data, image_points, slack, beta);
+    double avgdistsq = softposit_squared_dists(data, image_points, slack, beta);
+    if (SPDEBUG_LOOP) printf("avgdistsq: %f\n", avgdistsq);
+    assign_mat *assign = assign_normalize(&data->assign2, &data->assign1, data->small);
 
     cv::Mat L_inv = softposit_compute_L_inv(data, assign);
 
@@ -1279,15 +1189,13 @@ bool softposit_one(
       if (!softposit_update_pose_vectors(data, image_points, assign, L_inv, k, obj))
         return false;
 
-      // try to kick pose vectors out of the 0 rut?
-      // bool z1 = randomize_vec3_if_near_zero(obj->pose1);
-      // bool z2 = randomize_vec3_if_near_zero(obj->pose2);
       if (SPDEBUG_LOOP) {
         print_vec("pose1", obj->pose1);
         print_vec("pose2", obj->pose2);
         printf("pose1 len4: %f  len3: %f\n", cv::norm(obj->pose1), cv::norm(v4_to_v3(obj->pose1)));
         printf("pose2 len4: %f  len3: %f\n", cv::norm(obj->pose2), cv::norm(v4_to_v3(obj->pose2)));
         printf("dot 4: %f   dot 3: %f\n", obj->pose1.dot(obj->pose2), v4_to_v3(obj->pose1).dot(v4_to_v3(obj->pose2)));
+#if 0
         make_orthogonal_v3_in_v4(obj->pose1, obj->pose2, false);
         printf("orthogonalized\n");
         print_vec("pose1", obj->pose1);
@@ -1295,6 +1203,7 @@ bool softposit_one(
         printf("pose1 len4: %f  len3: %f\n", cv::norm(obj->pose1), cv::norm(v4_to_v3(obj->pose1)));
         printf("pose2 len4: %f  len3: %f\n", cv::norm(obj->pose2), cv::norm(v4_to_v3(obj->pose2)));
         printf("dot 4: %f   dot 3: %f\n", obj->pose1.dot(obj->pose2), v4_to_v3(obj->pose1).dot(v4_to_v3(obj->pose2)));
+#endif
       }
 
       // if (z1 || z2) {
@@ -1312,7 +1221,6 @@ bool softposit_one(
 
       softposit_update_occlusion(data);
       softposit_compute_correction(data);
-      if (SPDEBUG_LOOP) print_vector("correction", data->correction);
     }
 
     return true;
