@@ -142,69 +142,75 @@ extern "C" bool estimate_initial_pose(struct blob *blobs, int num_blobs,
 			for (i = 0; i < 3; i++)
 				trans->arr[i] = tvec.at<double>(i);
 		
+#if 0
 		  float rot_mat[4][4];
 		  oquatf_get_mat4x4(rot, trans, rot_mat);
 			printf("PnPRansac rot: %f %f %f\n", rot_mat[0][0], rot_mat[0][1], rot_mat[0][2]);
 			printf("               %f %f %f\n", rot_mat[1][0], rot_mat[1][1], rot_mat[1][2]);
 			printf("               %f %f %f\n", rot_mat[2][0], rot_mat[2][1], rot_mat[2][2]);
+#endif
+			return true;
 	}
 
   if (num_blobs >= 4) {
-	/* SoftPOSIT matching */
-	std::vector<cv::Vec3d> list_points3d_all(num_led_pos);
-	std::vector<cv::Vec3d> list_normals_all(num_led_pos);
-	std::vector<cv::Point2f> list_points2d_all(num_blobs);
-	std::vector<cv::Point2f> list_points2d_all_undistorted; // (num_blobs);
+		/* SoftPOSIT matching */
+		std::vector<cv::Vec3d> list_points3d_all(num_led_pos);
+		std::vector<cv::Vec3d> list_normals_all(num_led_pos);
+		std::vector<cv::Point2f> list_points2d_all(num_blobs);
+		std::vector<cv::Point2f> list_points2d_all_undistorted; // (num_blobs);
 
-	for (i = 0; i < num_blobs; i++) {
-		list_points2d_all[i].x = blobs[i].x;
-		list_points2d_all[i].y = blobs[i].y;
-		//printf("point2d %d: %d %d %d %d\n", i, blobs[i].x, blobs[i].y, blobs[i].width, blobs[i].height);
-	}
-	for (j = 0; j < num_led_pos; j++) {
-		list_points3d_all[j][0] = leds[j].pos.x;
-		list_points3d_all[j][1] = leds[j].pos.y;
-		list_points3d_all[j][2] = leds[j].pos.z;
-		list_normals_all[j][0] = leds[j].dir.x;
-		list_normals_all[j][1] = leds[j].dir.y;
-		list_normals_all[j][2] = leds[j].dir.z;
-	}
+		for (i = 0; i < num_blobs; i++) {
+			list_points2d_all[i].x = blobs[i].x;
+			list_points2d_all[i].y = blobs[i].y;
+			//printf("point2d %d: %d %d %d %d\n", i, blobs[i].x, blobs[i].y, blobs[i].width, blobs[i].height);
+		}
+		for (j = 0; j < num_led_pos; j++) {
+				list_points3d_all[j][0] = leds[j].pos.x;
+				list_points3d_all[j][1] = leds[j].pos.y;
+				list_points3d_all[j][2] = leds[j].pos.z;
+				list_normals_all[j][0] = leds[j].dir.x;
+				list_normals_all[j][1] = leds[j].dir.y;
+				list_normals_all[j][2] = leds[j].dir.z;
+		}
 
-	cv::fisheye::undistortPoints(list_points2d_all, list_points2d_all_undistorted, fishK, fishDistCoeffs);
+		cv::fisheye::undistortPoints(list_points2d_all, list_points2d_all_undistorted, fishK, fishDistCoeffs);
 
-	Object *obj = softposit_new_object(list_points3d_all, list_normals_all);
+		Object *obj = softposit_new_object(list_points3d_all, list_normals_all);
 				 
-	softposit_data *sp = softposit_new();
-	softposit_add_object(sp, obj);
-  softposit_set_debug(sp, debug_cb, cb_data);
-  softposit_set_pose_prior(sp, rot);
+		softposit_data *sp = softposit_new();
+		softposit_add_object(sp, obj);
+		softposit_set_debug(sp, debug_cb, cb_data);
+		softposit_set_pose_prior(sp, rot);
 
-	softposit(sp, list_points2d_all_undistorted);
+		if (softposit(sp, list_points2d_all_undistorted)) {
+				cv::Rodrigues(obj->rotation, rvec);
 
-	cv::Rodrigues(obj->rotation, rvec);
-	printf("softposit rot: %f %f %f\n", rvec.at<double>(0), rvec.at<double>(1), rvec.at<double>(2));
-	// printf("softposit rot: %f %f %f\n", obj->rotation.at<double>(0, 0), obj->rotation.at<double>(0, 1), obj->rotation.at<double>(0, 2));
-	// printf("               %f %f %f\n", obj->rotation.at<double>(1, 0), obj->rotation.at<double>(1, 1), obj->rotation.at<double>(1, 2));
-	// printf("               %f %f %f\n", obj->rotation.at<double>(2, 0), obj->rotation.at<double>(2, 1), obj->rotation.at<double>(2, 2));
+#if 0
+				printf("softposit rot: %f %f %f\n", rvec.at<double>(0), rvec.at<double>(1), rvec.at<double>(2));
+				printf("softposit rot: %f %f %f\n", obj->rotation.at<double>(0, 0), obj->rotation.at<double>(0, 1), obj->rotation.at<double>(0, 2));
+				printf("               %f %f %f\n", obj->rotation.at<double>(1, 0), obj->rotation.at<double>(1, 1), obj->rotation.at<double>(1, 2));
+				printf("               %f %f %f\n", obj->rotation.at<double>(2, 0), obj->rotation.at<double>(2, 1), obj->rotation.at<double>(2, 2));
 
-	printf("softposit trans: %f %f %f %f\n", obj->translation[0], obj->translation[1], obj->translation[2], obj->translation[3]);
+				printf("softposit trans: %f %f %f %f\n", obj->translation[0], obj->translation[1], obj->translation[2], obj->translation[3]);
+#endif
 
-			vec3f v;
-			double angle = sqrt(rvec.dot(rvec));
-			double inorm = 1.0f / angle;
+				vec3f v;
+				double angle = sqrt(rvec.dot(rvec));
+				double inorm = 1.0f / angle;
 		
-			v.x = rvec.at<double>(0) * inorm;
-			v.y = rvec.at<double>(1) * inorm;
-			v.z = rvec.at<double>(2) * inorm;
-			oquatf_init_axis (rot, &v, angle);
-		
-			for (i = 0; i < 3; i++)
-				trans->arr[i] = obj->translation[i];
+				v.x = rvec.at<double>(0) * inorm;
+				v.y = rvec.at<double>(1) * inorm;
+				v.z = rvec.at<double>(2) * inorm;
+				oquatf_init_axis (rot, &v, angle);
 
-	softposit_free_object(obj);
-	softposit_free(sp);
-  return true;
-  }
+				for (i = 0; i < 3; i++)
+						trans->arr[i] = obj->translation[i];
+
+				softposit_free_object(obj);
+				softposit_free(sp);
+				return true;
+		}
+	}
 
 	// abort();
 
