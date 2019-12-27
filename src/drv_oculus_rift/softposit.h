@@ -52,9 +52,13 @@ typedef struct {
   std::vector<double> correction; // correction terms (w)
   std::vector<int> occlusion_mask; // non-zero if the point is visible in the current pose. 
                                    // dot product based on normals and current pose
+
+  std::vector<int> closest_imgpoint; // Array of object points length, with the index != -1
+                                     // if the object point is the closest one to some image point
   assign_mat assign1;
   assign_mat assign2;
-  double last_distsqsum;
+  assign_mat *assign_last;
+  assign_mat distances;
 
   DebugVisCallback debug_cb;
   void *debug_cb_data;
@@ -71,7 +75,7 @@ void softposit_free(softposit_data* data);
 
 void softposit_add_object(softposit_data* data, Object *obj);
 
-void softposit(
+bool softposit(
   softposit_data *data,
   const std::vector<cv::Point2f> &image_points
 );

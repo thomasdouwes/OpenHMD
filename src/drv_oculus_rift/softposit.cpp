@@ -8,7 +8,7 @@ extern "C" {
 
 using namespace std;
 
-#define SPDEBUG_ALL 1
+#define SPDEBUG_ALL 0
 #define SPDEBUG_INIT (SPDEBUG_ALL && 0)
 #define SPDEBUG_DISTSQ (SPDEBUG_ALL && 0)
 #define SPDEBUG_DISTSQ_V (SPDEBUG_ALL && 0)
@@ -18,6 +18,7 @@ using namespace std;
 #define SPDEBUG_ROTTRANS (SPDEBUG_ALL && 0)
 #define SPDEBUG_OCCLUSION (SPDEBUG_ALL && 0)
 #define SPDEBUG_CORRECTION (SPDEBUG_ALL && 0)
+#define SPDEBUG_POSE_SCORE (SPDEBUG_ALL && 0)
 #define SPDEBUG_LOOP (SPDEBUG_ALL && 0)
 #define SPDEBUG_KBWAIT (SPDEBUG_ALL && 0)
 #define SPDEBUG_DONE (SPDEBUG_ALL && 1)
@@ -469,6 +470,10 @@ void assign_finish(softposit_data *data, assign_mat *assign) {
   for (y = 0; y < assign->height; y++) {
     double rowmax = assign_extra(assign, assign->width+y);
 
+    if (data->occlusion_mask[y] == 0)
+      printf(" ");
+    else
+      printf("-");
     for (x = 0; x < assign->width; x++) {
       double val = assign_get(assign, x, y);
 
@@ -540,7 +545,7 @@ softposit_data* softposit_new() {
   data->objects = std::vector<Object*>(0);
   data->correction = std::vector<double>(0);
 
-  // most of these will be set to something else in softposit_init
+  // most of these will be set to something else in softposit_loop
   data->beta_final = 0.85;
   data->beta_update = 1.05;
   data->small = 0.00001;
@@ -549,9 +554,10 @@ softposit_data* softposit_new() {
   data->alpha = 0.01; // pow (10/715.0, 2.0); // Don't match blobs more than 50 pixels away
   data->num_object_points = 0;
 
-  data->last_distsqsum = 0.0;
   data->assign1 = assign_mat_new(0, 0);
   data->assign2 = assign_mat_new(0, 0);
+  data->assign_last = NULL;
+  data->distances = assign_mat_new(0, 0);
   data->debug_cb = NULL;
   data->debug_cb_data = NULL;
 
@@ -601,6 +607,7 @@ static void softposit_send_debug (softposit_data *data, Object *obj, DebugPoseTy
 void softposit_free(softposit_data* data) {
   assign_mat_free(&data->assign1);
   assign_mat_free(&data->assign2);
+  assign_mat_free(&data->distances);
   delete data;
 }
 
@@ -612,6 +619,7 @@ void softposit_add_object(softposit_data* data, Object *obj) {
     // printf("add_object %ld %ld\n", data->num_object_points, obj->points.size());
     data->correction.resize(data->num_object_points);
     data->occlusion_mask.resize(data->num_object_points);
+    data->closest_imgpoint.resize(data->num_object_points);
   }
 }
 
@@ -621,7 +629,7 @@ assign_mat *softposit_one_setup(
   double slack,
   double beta
 );
-bool softposit_one(
+static bool softposit_one(
   softposit_data *data,
   const std::vector<cv::Point2f> &image_points,
   double slack,
@@ -629,12 +637,22 @@ bool softposit_one(
   double imgsize,
   double objsize
 );
-double softposit_squared_dists(
+static double softposit_compute_distance_metric(
   softposit_data *data,
   const std::vector<cv::Point2f> &image_points,
   double slack,
-  double beta
+  double beta,
+  assign_mat *dest
 );
+static bool softposit_compute_distances(
+  softposit_data *data,
+  const std::vector<cv::Point2f> &image_points,
+  assign_mat *dest
+);
+static double softposit_score_pose (
+  softposit_data *data,
+  const std::vector<cv::Point2f> &image_points,
+  cv::Vec4d &best_pose1, cv::Vec4d &best_pose2);
 
 static void
 pose_vectors_from_angles (softposit_data *data, float x_rot, float y_rot, float z_rot,
@@ -657,11 +675,11 @@ pose_vectors_from_angles (softposit_data *data, float x_rot, float y_rot, float 
     /* We have a pose prior, rotate to match it */
     mat4x4f prior_rot_mat, tmp;
 
-    printf ("Using pose prior %f %f %f %f\n",
-        data->pose_prior.w,
-        data->pose_prior.z,
-        data->pose_prior.y,
-        data->pose_prior.z);
+    if (SPDEBUG_INIT) {
+      printf ("Using pose prior %f %f %f %f\n",
+          data->pose_prior.w, data->pose_prior.z, data->pose_prior.y, data->pose_prior.z);
+    }
+
     oquatf_get_mat4x4(&data->pose_prior, &zero, prior_rot_mat.m);
     omat4x4f_mult(&rot_mat, &prior_rot_mat, &tmp);
     memcpy (&rot_mat, &tmp, sizeof(tmp));
@@ -673,7 +691,7 @@ pose_vectors_from_angles (softposit_data *data, float x_rot, float y_rot, float 
   }
 }
 
-void softposit_init(
+bool softposit_loop(
   softposit_data *data,
   const std::vector<cv::Point2f> &image_points,
   double slack,
@@ -682,6 +700,7 @@ void softposit_init(
 ) {
   size_t i, o, j, k;
   Object *obj;
+  bool found_poses = false;
 
   double x, y;
   double xmin = image_points[0].x, xmax = image_points[0].x;
@@ -689,6 +708,7 @@ void softposit_init(
 
   assign_resize(&data->assign1, image_points.size(), data->num_object_points);
   assign_resize(&data->assign2, image_points.size(), data->num_object_points);
+  assign_resize(&data->distances, image_points.size(), data->num_object_points);
 
   for (j = 0; j < image_points.size(); j++) {
     x = image_points[j].x;
@@ -703,7 +723,7 @@ void softposit_init(
 
   cv::Vec4d best_pose1;
   cv::Vec4d best_pose2;
-  double best_sqsum = 2000000000000.0;
+  double best_pose_score = 0.0;
 
   // initialize correction and (all visible) occlusion mask
   for (k = 0; k < data->num_object_points; k++) {
@@ -729,7 +749,7 @@ void softposit_init(
 
     /* Use an alpha ~5% of the image search area
      * to match points */
-    data->alpha = *imgsize / 20;
+    data->alpha = *imgsize / 30;
 
     if (SPDEBUG_INIT) {
       printf("x: min: %f  max: %f\n", xmin, xmax);
@@ -752,6 +772,7 @@ void softposit_init(
       float y_rot = step_angle * (p % steps);
       float x_rot = step_angle * ((p / steps) % steps);
       float z_rot = step_angle * ((p / (steps*steps)) % steps);
+      bool bad_pose = false;
 
       // Q1 = s(R1, Tx)
       // Q2 = s(R2, Ty)
@@ -780,6 +801,18 @@ void softposit_init(
         continue; /* Invalid starting pose */
       softposit_update_occlusion(data);
       softposit_send_debug (data, obj, DEBUG_POSE_INITIAL);
+      double pose_score = softposit_score_pose (data, image_points, obj->pose1, obj->pose2);
+      if (pose_score > best_pose_score) {
+        best_pose_score = pose_score;
+        best_pose1 = obj->pose1;
+        best_pose2 = obj->pose2;
+        if (SPDEBUG_DONE)
+          printf ("New best pose! score = %f\n", pose_score);
+        if (!softposit_compute_rot_trans(data, obj)) {
+          printf ("Invalid best pose! How did this happen??\n");
+        }
+        softposit_send_debug (data, obj, DEBUG_POSE_BEST);
+      }
 
       if (SPDEBUG_INIT){
         printf ("Start rotation of (x/y/z) %f,%f,%f degrees\n", x_rot, y_rot, z_rot);
@@ -800,7 +833,7 @@ void softposit_init(
       // This final beta is designed so that when an point->blob assignment is
       // closer than 1/5th of the target range, then we evaluate > exp(1) = e
       data->beta_final = 5.0/data->alpha;
-      data->beta_init = data->beta_final/10;
+      data->beta_init = data->beta_final/2;
       data->beta_update = 1.2;
 
       // initial beta should make the exp(-beta*distsq) for average distsq the same as slack
@@ -819,10 +852,13 @@ void softposit_init(
         if (SPDEBUG_LOOP) printf("\n\nsoftposit loop start beta: %f\n", beta);
         if (!softposit_one(data, image_points, slack, beta, *imgsize, *objsize)) {
           if (SPDEBUG_LOOP) printf("\n\nsoftposit loop aborting at beta: %f\n", beta);
+          bad_pose = true;
           break;
         }
         beta *= data->beta_update;
       }
+      if (bad_pose)
+        continue;
 
       // run a few iterations of the loop just for fun
       // softposit_one(data, image_points, slack, 0.0004);
@@ -836,36 +872,121 @@ void softposit_init(
       // the values should make values near 1 stay the same, while values closer to 0
       // go way closer to 0. A sqsum value near the number of image points is probably
       // the best goal. 
-      double avgdistsq = data->last_distsqsum;
-      if (avgdistsq < best_sqsum) {
-        best_sqsum = avgdistsq;
+      pose_score = softposit_score_pose (data, image_points, obj->pose1, obj->pose2);
+      if (pose_score > best_pose_score) {
+        best_pose_score = pose_score;
         best_pose1 = obj->pose1;
         best_pose2 = obj->pose2;
         if (SPDEBUG_DONE) {
-          printf ("New best pose! best_sqsum = %f\n", best_sqsum);
-          assign_finish(data, &data->assign1);
+          printf ("New best pose! score = %f\n", pose_score);
+          if (data->assign_last)
+            assign_finish(data, data->assign_last);
+        }
+        if (!softposit_compute_rot_trans(data, obj)) {
+          printf ("Invalid best pose! How did this happen??\n");
         }
         softposit_send_debug (data, obj, DEBUG_POSE_BEST);
       }
     }
 
     // printf("best_sqsum: %f\n", best_sqsum);
-
-    obj->pose1 = best_pose1;
-    obj->pose2 = best_pose2;
-    if (!softposit_compute_rot_trans(data, obj)) {
-      printf ("Invalid best pose! How did this happen??\n");
+    if (best_pose_score > 0.0) {
+      obj->pose1 = best_pose1;
+      obj->pose2 = best_pose2;
+      if (!softposit_compute_rot_trans(data, obj)) {
+        printf ("Invalid best pose! How did this happen??\n");
+      }
+      softposit_send_debug (data, obj, DEBUG_POSE_FINAL);
+      found_poses = true;
     }
-    softposit_send_debug (data, obj, DEBUG_POSE_FINAL);
   }
+  return found_poses;
+}
+
+static double softposit_score_pose (
+  softposit_data *data,
+  const std::vector<cv::Point2f> &image_points,
+  cv::Vec4d &best_pose1, cv::Vec4d &best_pose2)
+{
+  double pose_distances = 0.0;
+  assign_mat *dists = &data->distances;
+  int j, k;
+
+  if (!softposit_compute_distances(data, image_points, dists))
+    return 0.0;
+
+  // We compute a metric of the sum of minimum distances from each
+  // image point to the nearest object point, plus the sum of
+  // any object points not nearest to an image point to their nearest
+  // image point. A perfect match would be zero on both scores, and
+  // poses that fail to match expected object points to an image point
+  // are penalised, as are poses that collapse into one image point.
+  //
+  // The result is the inverse of the metric, so higher score is better.
+
+  // Clear the image point assignments for each object point
+  for (k = 0; k < (int) data->num_object_points; k++)
+    data->closest_imgpoint[k] = -1;
+
+  for (j = 0; j < (int) image_points.size(); j++) {
+    int closest = -1;
+    double distance = INFINITY;
+
+    for (k = 0; k < (int) data->num_object_points; k++) {
+      if (data->occlusion_mask[k] == 0) {
+        double val = assign_get(dists, j, k);
+        if (val < distance) {
+            distance = val;
+            closest = k;
+        }
+      }
+    }
+
+    if (closest != -1) {
+      data->closest_imgpoint[closest] = j;
+      if (SPDEBUG_POSE_SCORE) printf ("Image point %d closest = %d distance %g\n",
+        j, closest, distance * 715.0);
+      pose_distances += distance;
+    }
+    else {
+      printf ("Image point %d - not matched!\n", j);
+    }
+  }
+
+  for (k = 0; k < (int) data->num_object_points; k++) {
+    int closest = -1;
+    double distance = INFINITY;
+    if (data->occlusion_mask[k] != 0)
+      continue; // Ignore occluded object points
+    if (data->closest_imgpoint[k] != -1)
+      continue; // This object point had a match to an image point already
+    for (j = 0; j < (int) image_points.size(); j++) {
+      double val = assign_get(dists, j, k);
+      if (val < distance) {
+        distance = val;
+        closest = j;
+      }
+    }
+    if (closest != -1) {
+      if (SPDEBUG_POSE_SCORE) printf ("Object point %d closest = %d distance %g\n",
+        k, closest, distance * 715.0);
+      pose_distances += distance;
+    }
+  }
+
+  if (pose_distances == 0.0)
+    return INFINITY;
+  if (SPDEBUG_POSE_SCORE) printf ("Pose distance %f score = %f\n", pose_distances * 715.0, 1.0 / pose_distances);
+  return 1.0 / pose_distances;
 }
 
 // returns average distsq
-double softposit_squared_dists(
+static double softposit_compute_distance_metric(
   softposit_data *data,
   const std::vector<cv::Point2f> &image_points,
   double slack,
-  double beta
+  double beta,
+  assign_mat *dest
 ) {
   size_t i, o, j, k;
   Object *obj;
@@ -921,13 +1042,13 @@ double softposit_squared_dists(
             printf("dist %f exp(%f) -> %f\n", distsq, x, val);
           }
 
-          assign_set(&data->assign1, j, k, val);
+          assign_set(dest, j, k, val);
         }
       }
       else {
         if (SPDEBUG_DISTSQ) printf("   occluded\n");
         for (j = 0; j < image_points.size(); j++) {
-          assign_set(&data->assign1, j, k, 0.0);
+          assign_set(dest, j, k, 0.0);
         }
       }
       if (SPDEBUG_DISTSQ) printf("\n");
@@ -935,11 +1056,52 @@ double softposit_squared_dists(
   }
   if (SPDEBUG_DISTSQ) {
     printf("after distsq\n");
-    assign_print(&data->assign1);
+    assign_print(dest);
   }
 
-  data->last_distsqsum = distsqsum / (data->assign1.width * expected_points);
-  return data->last_distsqsum;
+  return distsqsum / (dest->width * expected_points);
+}
+
+static bool softposit_compute_distances(
+  softposit_data *data,
+  const std::vector<cv::Point2f> &image_points,
+  assign_mat *dest
+) {
+  size_t i, o, j, k;
+  Object *obj;
+
+  int expected_points = 0;
+
+  for (o = 0, k = 0; o < data->objects.size(); o++) {
+    obj = data->objects[o];
+
+    for (i = 0; i < obj->points.size(); i++, k++) {
+      double dot1 = obj->pose1.dot(v3_to_v4(obj->points[i], 1));
+      double dot2 = obj->pose2.dot(v3_to_v4(obj->points[i], 1));
+      if (isnan(dot1)) {
+        printf("abort softposit_compute_distances isnan(dot1)\n");
+        return false;
+      }
+
+      if (data->occlusion_mask[k] == 0) {
+        expected_points++;
+
+        for (j = 0; j < image_points.size(); j++) {
+          // compute squared distances
+          double distsq = 
+            pow(dot1 - data->correction[k] * image_points[j].x, 2.0) + 
+            pow(dot2 - data->correction[k] * image_points[j].y, 2.0);
+          assign_set(dest, j, k, distsq);
+        }
+      }
+      else {
+        for (j = 0; j < image_points.size(); j++) {
+          assign_set(dest, j, k, INFINITY);
+        }
+      }
+    }
+  }
+  return true;
 }
 
 cv::Mat softposit_compute_L_inv(
@@ -1151,7 +1313,7 @@ static void softposit_update_occlusion(softposit_data *data)
   }
 }
 
-void softposit_compute_correction(
+static void softposit_compute_correction(
   softposit_data *data
 ) {
   size_t i, o, k;
@@ -1166,7 +1328,7 @@ void softposit_compute_correction(
   if (SPDEBUG_CORRECTION) print_vector("correction", data->correction);
 }
 
-bool softposit_one(
+static bool softposit_one(
   softposit_data *data,
   const std::vector<cv::Point2f> &image_points,
   double slack,
@@ -1174,9 +1336,12 @@ bool softposit_one(
   double imgsize,
   double objsize
 ) {
-    double avgdistsq = softposit_squared_dists(data, image_points, slack, beta);
+    assign_mat *assign_scores = &data->assign1;
+
+    double avgdistsq = softposit_compute_distance_metric(data, image_points, slack, beta, assign_scores);
     if (SPDEBUG_LOOP) printf("avgdistsq: %f\n", avgdistsq);
-    assign_mat *assign = assign_normalize(&data->assign2, &data->assign1, data->small);
+    assign_mat *assign = assign_normalize(&data->assign2, assign_scores, data->small);
+    data->assign_last = assign;
 
     cv::Mat L_inv = softposit_compute_L_inv(data, assign);
 
@@ -1226,7 +1391,7 @@ bool softposit_one(
     return true;
 }
 
-void softposit(
+bool softposit(
   softposit_data *data,
   const std::vector<cv::Point2f> &image_points
 ) {
@@ -1240,7 +1405,7 @@ void softposit(
 
   double imgsize, objsize;
 
-  softposit_init(data, image_points, slack, &imgsize, &objsize);
+  bool ret = softposit_loop(data, image_points, slack, &imgsize, &objsize);
 
 #if 0
   // printf("softposit init\n");
@@ -1281,11 +1446,12 @@ void softposit(
 #endif
 
   if (SPDEBUG_DONE) {
-    printf("softposit done\n");
+    printf("softposit done. Result %d\n", ret);
     printf("final assign:\n"); assign_print(&data->assign1);
-    assign_finish(data, &data->assign1);
+    if (data->assign_last)
+      assign_finish(data, data->assign_last);
     print_mat("rot", &data->objects[0]->rotation);
     print_vec("trans", data->objects[0]->translation);
   }
-    // abort();
+  return ret;
 }
