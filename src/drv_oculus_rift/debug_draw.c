@@ -198,42 +198,6 @@ draw_projected_leds_at(rift_sensor_ctx *sensor_ctx, rift_leds *leds, struct rift
       rot, trans,
       sensor_ctx->led_out_points);
 
-  /* Check how many LEDs have matching blobs in this pose,
-    * if there's enough we have a good match */
-  int matched_visible_blobs = 0;
-  int visible_leds = 0;
-  for (i = 0; i < leds->num_points; i++) {
-    vec3f *p = sensor_ctx->led_out_points + i;
-    int x = round(p->x);
-    int y = round(p->y);
-
-    vec3f normal, position;
-    double facing_dot;
-
-    oquatf_get_rotated(rot, &leds->points[i].pos, &position);
-    ovec3f_add (trans, &position, &position);
-
-    oquatf_get_rotated(rot, &leds->points[i].dir, &normal);
-    facing_dot = ovec3f_get_dot (&position, &normal);
-    if (facing_dot < -0.5) {
-      /* Strongly Camera facing */
-      struct blob *b = blobwatch_find_blob_at(sensor_ctx->bw, x, y);
-      visible_leds++;
-      if (b != NULL) {
-        matched_visible_blobs++;
-      }
-    }
-  }
-  //printf("  vis: %d  matched: %d  blobs: %d\r", visible_leds, matched_visible_blobs, sensor_ctx->bwobs->num_led_blobs);
-  bool good_pose_match = false;
-  if (visible_leds > 4 && matched_visible_blobs > 4) {
-    if (sensor_ctx->bwobs->num_led_blobs < 2 * matched_visible_blobs) {
-      good_pose_match = true;
-      printf ("  Found good pose match - %u LEDs matched %u visible ones\r",
-         matched_visible_blobs, visible_leds);
-    }
-  }
-
   for (i = 0; i < leds->num_points; i++) {
     vec3f *p = sensor_ctx->led_out_points + i;
     int x = round(p->x);
@@ -259,16 +223,6 @@ draw_projected_leds_at(rift_sensor_ctx *sensor_ctx, rift_leds *leds, struct rift
 
     if (facing_dot < -0.5) {
       /* Camera facing */
-      if (good_pose_match) {
-        /* Back project LED ids into blobs if we find them and the dot product
-          * shows them pointing strongly to the camera */
-        struct blob *b = blobwatch_find_blob_at(sensor_ctx->bw, x, y);
-        if (b != NULL && facing_dot < -0.5 && b->led_id != i) {
-          /* Found a blob! */
-          printf ("Marking LED %d at %d,%d\n", i, x, y);
-          b->led_id = i;
-        }
-      }
       if (color1 == 0xFF00FF) // HACK: Draw best pose bigger
         draw_rgb_marker (dest, width, out_stride, height, x, y, 12, 12, color1);
       else

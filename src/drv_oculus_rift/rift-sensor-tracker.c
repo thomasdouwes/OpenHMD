@@ -40,13 +40,13 @@ static int tracker_process_blobs(rift_sensor_ctx *ctx)
 	vec3f trans = ctx->pose_pos;
 
 	if (ctx->tracker->devices[0].fusion) {
-    rot = ctx->tracker->devices[0].fusion->orient;
-    trans = ctx->tracker->devices[0].fusion->world_position;
-    // Metres to micrometres
-    ovec3f_multiply_scalar (&trans, 1000000.0, &trans);
-    // HACK : Reset our local orientation based on the sensor fusion
-    // as the pose prior for the estimate_initial_pose() call
-    ctx->pose_orient = rot;
+		rot = ctx->tracker->devices[0].fusion->orient;
+		trans = ctx->tracker->devices[0].fusion->world_position;
+		// Metres to micrometres
+		ovec3f_multiply_scalar (&trans, 1000000.0, &trans);
+		// HACK : Reset our local orientation based on the sensor fusion
+		// as the pose prior for the estimate_initial_pose() call
+		ctx->pose_orient = rot;
   }
 
 	int num_leds = 0;
@@ -211,6 +211,8 @@ static void new_frame_cb(struct rift_sensor_uvc_stream *stream)
 
     if (tracker_process_blobs (sensor_ctx)) {
       int i;
+      quatf *rot = &sensor_ctx->pose_orient;
+      vec3f *trans = &sensor_ctx->pose_pos;
 
       /* Project HMD LEDs into the image */
       rift_project_points(leds->points, leds->num_points,
@@ -224,13 +226,17 @@ static void new_frame_cb(struct rift_sensor_uvc_stream *stream)
       int visible_leds = 0;
       for (i = 0; i < leds->num_points; i++) {
         vec3f *p = sensor_ctx->led_out_points + i;
-        vec3f facing;
         int x = round(p->x);
         int y = round(p->y);
 
-        oquatf_get_rotated(&sensor_ctx->pose_orient, &leds->points[i].dir, &facing);
+        vec3f normal, position;
+        double facing_dot;
+        oquatf_get_rotated(rot, &leds->points[i].pos, &position);
+        ovec3f_add (trans, &position, &position);
+        oquatf_get_rotated(rot, &leds->points[i].dir, &normal);
+        facing_dot = ovec3f_get_dot (&position, &normal);
 
-        if (facing.z < -0.5) {
+        if (facing_dot < -0.5) {
           /* Strongly Camera facing */
           struct blob *b = blobwatch_find_blob_at(sensor_ctx->bw, x, y);
           visible_leds++;
@@ -258,26 +264,34 @@ static void new_frame_cb(struct rift_sensor_uvc_stream *stream)
 								&sensor_ctx->pose_orient);
 					}
         }
+        else {
+          printf ("Failed pose match - only %u LEDs matched %u visible ones\n",
+              matched_visible_blobs, visible_leds);
+        }
       }
 
       if (good_pose_match) {
 				for (i = 0; i < leds->num_points; i++) {
 					vec3f *p = sensor_ctx->led_out_points + i;
-					vec3f facing;
 					int x = round(p->x);
 					int y = round(p->y);
 
-					oquatf_get_rotated(&sensor_ctx->pose_orient, &leds->points[i].dir, &facing);
+					vec3f normal, position;
+					double facing_dot;
+					oquatf_get_rotated(rot, &leds->points[i].pos, &position);
+					ovec3f_add (trans, &position, &position);
+					oquatf_get_rotated(rot, &leds->points[i].dir, &normal);
+					facing_dot = ovec3f_get_dot (&position, &normal);
 
-					if (facing.z < 0) {
-					/* Camera facing */
-					/* Back project LED ids into blobs if we find them */
-					struct blob *b = blobwatch_find_blob_at(sensor_ctx->bw, x, y);
-					if (b != NULL && b->led_id != i) {
-						/* Found a blob! */
-						LOGD ("Marking LED %d at %d,%d (was %d)\n", i, x, y, b->led_id);
-						b->led_id = i;
-					}
+					if (facing_dot < -0.5) {
+						/* Camera facing */
+						/* Back project LED ids into blobs if we find them */
+						struct blob *b = blobwatch_find_blob_at(sensor_ctx->bw, x, y);
+						if (b != NULL && b->led_id != i) {
+							/* Found a blob! */
+							LOGD ("Marking LED %d at %d,%d (was %d)\n", i, x, y, b->led_id);
+							b->led_id = i;
+						}
 					}
 				}
       }
@@ -337,8 +351,16 @@ pose_matching_debug_cb (rift_sensor_ctx *sensor_ctx, DebugPoseType pose_type, qu
 
   /* Draw blobs and the current pose (blue) */
 	draw_blob_debug_stuff(sensor_ctx, &sensor_ctx->stream);
-  if (oquatf_get_length (&sensor_ctx->pose_orient) > 0)
-	  draw_projected_leds_at(sensor_ctx, sensor_ctx->tracker->leds, &sensor_ctx->stream, &sensor_ctx->pose_orient, &sensor_ctx->pose_pos, 0xFF0000);
+
+	if (sensor_ctx->tracker->devices[0].fusion) {
+		quatf world_rot = sensor_ctx->tracker->devices[0].fusion->orient;
+		vec3f world_trans = sensor_ctx->tracker->devices[0].fusion->world_position;
+
+		// Metres to micrometres
+		ovec3f_multiply_scalar (&world_trans, 1000000.0, &world_trans);
+		draw_projected_leds_at(sensor_ctx, sensor_ctx->tracker->leds, &sensor_ctx->stream,
+				&world_rot, &world_trans, 0xFF0000);
+  }
 
   /* Draw the initial pose, or else draw the initial pose (green) + the intermediate guess posed (red) */
   if (pose_type == DEBUG_POSE_INITIAL) {
