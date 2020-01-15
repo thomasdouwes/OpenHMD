@@ -47,6 +47,12 @@ void ovec3f_add(const vec3f* a, const vec3f* b, vec3f* out)
 		out->arr[i] = a->arr[i] + b->arr[i];
 }
 
+void ovec3f_inverse(vec3f *me)
+{
+	for(int i = 0; i < 3; i++)
+		me->arr[i] = -me->arr[i];
+}
+
 float ovec3f_get_dot(const vec3f* me, const vec3f* vec)
 {
 	return me->x * vec->x + me->y * vec->y + me->z * vec->z;
@@ -261,6 +267,26 @@ void oquatf_from_euler_angles(quatf* me, const vec3f* angles)
     me->y = cy * cp * sr - sy * sp * cr;
     me->z = sy * cp * sr + cy * sp * cr;
     me->w = sy * cp * cr - cy * sp * sr;
+}
+
+void oposef_init (posef* p, const vec3f *pos, const quatf *orient)
+{
+	p->pos = *pos;
+	p->orient = *orient;
+}
+
+void oposef_inverse (posef *me)
+{
+	vec3f tmp;
+
+	// Invert the orientation
+	oquatf_inverse (&me->orient);
+
+	// Rotate the pos by the inverse orientation to bring it into
+	// the right frame of reference, then reverse the direction
+	oquatf_get_rotated (&me->orient, &me->pos, &tmp);
+	ovec3f_inverse(&tmp);
+	me->pos = tmp;
 }
 
 // matrix

@@ -291,7 +291,8 @@ unittests_sources = [
 	'tests/unittests/main.c',
 	'tests/unittests/quat.c',
 	'tests/unittests/tests.h',
-	'tests/unittests/vec.c'
+	'tests/unittests/vec.c',
+	'tests/unittests/pose.c'
 ]
 
 unittests = executable(
