@@ -478,6 +478,7 @@ rift_sensor_new (ohmd_context* ohmd_ctx, int id, const char *serial_no, libusb_d
 		LOGE("Failed to read Rift sensor calibration data");
 		goto fail;
 	  }
+		break;
 	}
 	case DK2_PID:
 	{
@@ -491,6 +492,7 @@ rift_sensor_new (ohmd_context* ohmd_ctx, int id, const char *serial_no, libusb_d
 		ret = mt9v034_set_sync(usb_devh, true);
 		if (ret < 0)
 			goto fail;
+		break;
 	}
   }
   LOGI("Sensor %d ready\n", id);
