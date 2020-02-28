@@ -111,13 +111,14 @@ static int tracker_process_blobs(rift_sensor_ctx *ctx)
   }
 
 	int num_leds = 0;
+	int num_inliers = 0;
 
   /*
    * Estimate initial pose using previously known [rot|trans].
    */
   if (estimate_initial_pose(bwobs->blobs, bwobs->num_blobs, ctx->tracker->leds->points,
             ctx->tracker->leds->num_points, camera_matrix, dist_coeffs, &rot, &trans,
-            &num_leds, true)) {
+            &num_leds, &num_inliers, true)) {
     // Reverse the Z direction of the translation we detected so motion toward the camera is
     // forward motion
     ovec3f_inverse (&trans);
