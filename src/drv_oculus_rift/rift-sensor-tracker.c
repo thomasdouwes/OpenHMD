@@ -19,6 +19,7 @@
 #include "rift-sensor-ar0134.h"
 #include "rift-sensor-mt9v034.h"
 #include "rift-sensor-esp770u.h"
+#include "rift-sensor-esp570.h"
 #include "rift-sensor-uvc.h"
 
 #include "rift-sensor-maths.h"
@@ -59,7 +60,8 @@ struct rift_sensor_ctx_s
 	struct blobservation* bwobs;
 
   dmat3 camera_matrix;
-  double dist_coeffs[4];
+  bool dist_fisheye;
+  double dist_coeffs[5];
 
   kalman_pose *pose_filter;
   vec3f pose_pos;
@@ -117,7 +119,7 @@ static int tracker_process_blobs(rift_sensor_ctx *ctx)
    * Estimate initial pose using previously known [rot|trans].
    */
   if (estimate_initial_pose(bwobs->blobs, bwobs->num_blobs, ctx->tracker->leds->points,
-            ctx->tracker->leds->num_points, camera_matrix, dist_coeffs, &rot, &trans,
+            ctx->tracker->leds->num_points, camera_matrix, dist_coeffs, ctx->dist_fisheye, &rot, &trans,
             &num_leds, &num_inliers, true)) {
     // Reverse the Z direction of the translation we detected so motion toward the camera is
     // forward motion
@@ -147,32 +149,79 @@ rift_sensor_tracker_add_device (rift_tracker_ctx *ctx, int device_id, fusion *f)
 }
 
 static int
-rift_sensor_get_calibration(rift_sensor_ctx *ctx)
+rift_sensor_get_calibration(rift_sensor_ctx *ctx, uint16_t usb_idProduct)
 {
         uint8_t buf[128];
         double * const A = ctx->camera_matrix.m;
         double * const k = ctx->dist_coeffs;
         double fx, fy, cx, cy;
         double k1, k2, k3, k4;
+        double p1, p2;
         int ret;
 
-        /* Read a 128-byte block at EEPROM address 0x1d000 */
-        ret = rift_sensor_esp770u_flash_read(ctx->usb_devh, 0x1d000, buf, sizeof buf);
-        if (ret < 0)
-                return ret;
+        switch (usb_idProduct) {
+			      case CV1_PID:
+				        /* Read a 128-byte block at EEPROM address 0x1d000 */
+				        ret = rift_sensor_esp770u_flash_read(ctx->usb_devh, 0x1d000, buf, sizeof buf);
+				        if (ret < 0)
+				                return ret;
 
-        /* Fisheye distortion model parameters from firmware */
-        fx = fy = *(float *)(buf + 0x30);
-        cx = *(float *)(buf + 0x34);
-        cy = *(float *)(buf + 0x38);
+				        /* Fisheye distortion model parameters from firmware */
+								/* FIXME: Need to endian swap for BE systems: */
+				        fx = fy = *(float *)(buf + 0x30);
+				        cx = *(float *)(buf + 0x34);
+				        cy = *(float *)(buf + 0x38);
 
-        k1 = *(float *)(buf + 0x48);
-        k2 = *(float *)(buf + 0x4c);
-        k3 = *(float *)(buf + 0x50);
-        k4 = *(float *)(buf + 0x54);
+				        k1 = *(float *)(buf + 0x48);
+				        k2 = *(float *)(buf + 0x4c);
+				        k3 = *(float *)(buf + 0x50);
+				        k4 = *(float *)(buf + 0x54);
 
-        printf (" f = [ %7.3f %7.3f ], c = [ %7.3f %7.3f ]\n", fx, fy, cx, cy);
-        printf (" k = [ %9.6f %9.6f %9.6f %9.6f ]\n", k1, k2, k3, k4);
+                printf (" f = [ %7.3f %7.3f ], c = [ %7.3f %7.3f ]\n", fx, fy, cx, cy);
+                printf (" k = [ %9.6f %9.6f %9.6f %9.6f ]\n", k1, k2, k3, k4);
+                /*
+                * k = [ k₁ k₂, k₃, k4 ] for CV1 fisheye distortion
+                */
+                k[0] = k1; k[1] = k2; k[2] = k3; k[3] = k4;
+                ctx->dist_fisheye = true;
+								break;
+						case DK2_PID: {
+                int i;
+
+								/* Read 4 32-byte blocks at EEPROM address 0x2000 */
+								for (i = 0; i < 128; i += 32) {
+												ret = esp570_eeprom_read(ctx->usb_devh, 0x2000 + i, buf + i, 32);
+												if (ret < 0)
+																return ret;
+								}
+
+								/* FIXME: Need to endian swap for BE systems: */
+				        fx = *(double *)(buf + 18);
+				        fy = *(double *)(buf + 30);
+				        cx = *(double *)(buf + 42);
+				        cy = *(double *)(buf + 54);
+				        k1 = *(double *)(buf + 66);
+				        k2 = *(double *)(buf + 78);
+				        p1 = *(double *)(buf + 90);
+				        p2 = *(double *)(buf + 102);
+				        k3 = *(double *)(buf + 114);
+
+                printf (" f = [ %7.3f %7.3f ], c = [ %7.3f %7.3f ]\n", fx, fy, cx, cy);
+                printf (" p = [ %9.6f %9.6f ]\n", p1, p2);
+                printf (" k = [ %9.6f %9.6f %9.6f ]\n", k1, k2, k3);
+
+                /*
+                * k = [ k₁ k₂, p1, p2, k₃, k4 ] for DK2 distortion
+                */
+                k[0] = k1; k[1] = k2;
+                k[1] = p1; k[2] = p2;
+                k[4] = k3;
+                ctx->dist_fisheye = false;
+								break;
+            }
+						default:
+								return -1;
+				}
 
         /*
          *     ⎡ fx 0  cx ⎤
@@ -182,11 +231,6 @@ rift_sensor_get_calibration(rift_sensor_ctx *ctx)
         A[0] = fx;  A[1] = 0.0; A[2] = cx;
         A[3] = 0.0; A[4] = fy;  A[5] = cy;
         A[6] = 0.0; A[7] = 0.0; A[8] = 1.0;
-
-        /*
-         * k = [ k₁ k₂, k₃, k4 ]
-         */
-        k[0] = k1; k[1] = k2; k[2] = k3; k[3] = k4;
 
         return 0;
 }
@@ -277,7 +321,7 @@ static void new_frame_cb(struct rift_sensor_uvc_stream *stream)
 
       /* Project HMD LEDs into the image */
       rift_project_points(leds->points, leds->num_points,
-          &sensor_ctx->camera_matrix, sensor_ctx->dist_coeffs,
+          &sensor_ctx->camera_matrix, sensor_ctx->dist_coeffs, sensor_ctx->dist_fisheye,
           &sensor_ctx->pose_orient, &trans,
           sensor_ctx->led_out_points);
 
@@ -455,13 +499,20 @@ rift_sensor_new (ohmd_context* ohmd_ctx, int id, const char *serial_no, libusb_d
 
   sensor_ctx->bw = blobwatch_new(sensor_ctx->stream.width, sensor_ctx->stream.height);
 
+  LOGV("Sensor %d - reading Calibration\n", id);
+  ret = rift_sensor_get_calibration(sensor_ctx, desc.idProduct);
+  if (ret < 0) {
+  	LOGE("Failed to read Rift sensor calibration data");
+  	goto fail;
+  }
+
   LOGI("Sensor %d starting stream\n", id);
   ret = rift_sensor_uvc_stream_start (&sensor_ctx->stream);
   ASSERT_MSG(ret >= 0, fail, "could not start streaming\n");
   sensor_ctx->stream_started = 1;
 
   switch (desc.idProduct) {
-	case CV1_PID: 
+	case CV1_PID:
 	{
 	  LOGV("Sensor %d - enabling exposure sync\n", id);
 	  ret = rift_sensor_ar0134_init(sensor_ctx->usb_devh);
@@ -472,13 +523,6 @@ rift_sensor_new (ohmd_context* ohmd_ctx, int id, const char *serial_no, libusb_d
 	  ret = rift_sensor_esp770u_setup_radio(sensor_ctx->usb_devh, radio_id);
 	  if (ret < 0)
 	    goto fail;
-
-	  LOGV("Sensor %d - reading Calibration\n", id);
-	  ret = rift_sensor_get_calibration(sensor_ctx);
-	  if (ret < 0) {
-		LOGE("Failed to read Rift sensor calibration data");
-		goto fail;
-	  }
 		break;
 	}
 	case DK2_PID:
