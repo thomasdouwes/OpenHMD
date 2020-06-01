@@ -12,8 +12,6 @@
 
 #define FEATURE_BUFFER_SIZE 256
 
-#define TICK_LEN (2.0f / 1000.0f) // 500 Hz ticks
-
 #define KEEPALIVE_INTERVAL_MS 1000
 #define CAMERA_REPORT_INTERVAL_MS 1000
 
@@ -121,15 +119,11 @@ typedef struct {
 } rift_s_controller_report_t;
 
 typedef struct {
+	uint8_t marker;
+
 	int16_t accel[3];
 	int16_t gyro[3];
-
-	/* For a while I thought this was a time delta, but the values
-	 * don't really make sense. They're sometimes ~2000, sometimes around 4000-4400,
-	 * and seem to gradually increase the longer the headset is running. Is it temperature?
-	 * If so, it's very noisy */
-	uint16_t unknown;
-	uint8_t marker;
+	int16_t temperature;
 } __attribute__((aligned(1), packed)) rift_s_hmd_imu_sample_t;
 
 typedef struct {
@@ -138,10 +132,9 @@ typedef struct {
 
 	uint32_t timestamp;
 
-	uint8_t marker;
-
 	rift_s_hmd_imu_sample_t samples[3];
 
+	uint8_t marker;
 	uint8_t unknown2;
 
 	/* Frame timestamp and ID increment when the screen is running,
@@ -162,8 +155,19 @@ typedef struct {
 	uint8_t unknown2[14];
 } __attribute__((aligned(1), packed)) rift_s_device_info_t;
 
+/* Read using report 9 */
+typedef struct {
+		uint8_t cmd;
+		uint32_t imu_hz;
+		float gyro_scale; /* Gyro = reading / 32768 * gyro_scale */
+		float accel_scale; /* Accel = reading * g / accel_scale */
+		float temperature_scale; /* Temperature = reading / scale + offset */
+		float temperature_offset;
+} __attribute__((aligned(1), packed)) rift_s_imu_config_t;
+
 int rift_s_get_report1 (hid_device *hid);
 int rift_s_read_device_info (hid_device *hid, rift_s_device_info_t *device_info);
+int rift_s_read_imu_config (hid_device *hid, rift_s_imu_config_t *imu_config);
 int rift_s_hmd_enable (hid_device *hid, bool enable);
 int rift_s_set_screen_enable (hid_device *hid, bool enable);
 

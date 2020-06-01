@@ -45,6 +45,7 @@ struct rift_s_hmd_s {
 	double last_keep_alive;
 	fusion sensor_fusion;
 	vec3f raw_mag, raw_accel, raw_gyro;
+	float temperature;
 
 	bool display_on;
 
@@ -52,6 +53,7 @@ struct rift_s_hmd_s {
 	rift_s_device_priv hmd_dev;
 
 	rift_s_device_info_t device_info;
+	rift_s_imu_config_t imu_config;
 	rift_s_imu_calibration imu_calibration;
 };
 
@@ -151,38 +153,19 @@ handle_hmd_report (rift_s_hmd_t *priv, const unsigned char *buf, int size)
 		return;
 	}
 
-	/* This report is invalid */
-	if (report.marker & 0x80) {
-		return;
-	}
-
-	int num_samples = 0;
-
-	/* Count how many IMU samples are in this report */
-	for(num_samples = 0; num_samples < 3; num_samples++){
-		rift_s_hmd_imu_sample_t *s = report.samples + num_samples;
-		if (s->marker & 0x80)
-				break; /* Sample (and remaining ones) are invalid */
-	}
-
-	if (num_samples == 0)
-		goto done;
-
-	// TODO: handle overflows in a nicer way
-	// TODO: Is there a way to get the sample rate (TICK_LEN) directly
-	// from the Rift S?
+  const float TICK_LEN = 1.0 / priv->imu_config.imu_hz;
 	float dt = TICK_LEN;
-	if (report.timestamp > priv->last_imu_timestamp)
-	{
+
+	if (priv->last_imu_timestamp != 0) {
 		dt = (report.timestamp - priv->last_imu_timestamp) / 1000000.0f;
-		dt -= (num_samples - 1) * TICK_LEN;
 	}
 
-	/* FIXME: This mostly seems to work, but there's something funky
-	 * about the dt calculate. Usually, we only get 1 sample per report,
-	 * with reports 2ms apart - but sometimes we get more than one - sometimes
-	 * 3, and the reports will still only be about 2ms apart */
-	for(int i = 0; i < 3; i++){
+	const float gyro_scale = priv->imu_config.gyro_scale / 32768.0;
+	const float accel_scale = OHMD_GRAVITY_EARTH / priv->imu_config.accel_scale;
+	const float temperature_scale = 1.0 / priv->imu_config.temperature_scale;
+	const float temperature_offset = priv->imu_config.temperature_offset;
+
+	for(int i = 0; i < 3; i++) {
 		rift_s_hmd_imu_sample_t *s = report.samples + i;
 
 		if (s->marker & 0x80)
@@ -198,13 +181,13 @@ handle_hmd_report (rift_s_hmd_t *priv, const unsigned char *buf, int size)
 #endif
 		vec3f gyro, accel;
 
-		gyro.x = 1.0 / 1000.0 * s->gyro[0];
-		gyro.y = 1.0 / 1000.0 * s->gyro[1];
-		gyro.z = 1.0 / 1000.0 * s->gyro[2];
+		gyro.x = gyro_scale * s->gyro[0];
+		gyro.y = gyro_scale * s->gyro[1];
+		gyro.z = gyro_scale * s->gyro[2];
 
-		accel.x = OHMD_GRAVITY_EARTH / 4096 * s->accel[0];
-		accel.y = OHMD_GRAVITY_EARTH / 4096 * s->accel[1];
-		accel.z = OHMD_GRAVITY_EARTH / 4096 * s->accel[2];
+		accel.x = accel_scale * s->accel[0];
+		accel.y = accel_scale * s->accel[1];
+		accel.z = accel_scale * s->accel[2];
 
 		/* Apply correction offsets first, then rectify */
 		for (int j = 0; j < 3; j++) {
@@ -218,11 +201,13 @@ handle_hmd_report (rift_s_hmd_t *priv, const unsigned char *buf, int size)
 		priv->raw_accel = accel;
 		priv->raw_gyro = gyro;
 
+		/* FIXME: This doesn't seem to produce the right numbers, but it's OK - we don't use it anyway */
+		priv->temperature = temperature_scale * (s->temperature - temperature_offset) + 25;
+
 		ofusion_update(&priv->sensor_fusion, dt, &priv->raw_gyro, &priv->raw_accel, &priv->raw_mag);
 		dt = TICK_LEN;
 	}
 
-done:
 	priv->last_imu_timestamp = report.timestamp;
 }
 
@@ -399,12 +384,17 @@ static rift_s_hmd_t *open_hmd(ohmd_driver* driver, ohmd_device_desc* desc)
 	hid = priv->handles[0];
 
 	if (rift_s_read_device_info (hid, &priv->device_info) < 0) {
-			LOGE("Failed to return Rift S device info");
+			LOGE("Failed to read Rift S device info");
 			goto cleanup;
 	}
 
 	if (rift_s_get_report1 (hid) < 0) {
-			LOGE("Failed to return Rift S Report 1");
+			LOGE("Failed to read Rift S Report 1");
+			goto cleanup;
+	}
+
+	if (rift_s_read_imu_config (hid, &priv->imu_config) < 0) {
+			LOGE("Failed to read IMU configuration block");
 			goto cleanup;
 	}
 

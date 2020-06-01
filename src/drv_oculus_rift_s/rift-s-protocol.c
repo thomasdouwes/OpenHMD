@@ -369,6 +369,20 @@ int rift_s_get_report1 (hid_device *hid) {
 	return 0;
 }
 
+int rift_s_read_imu_config (hid_device *hid, rift_s_imu_config_t *imu_config)
+{
+	uint8_t buf[FEATURE_BUFFER_SIZE];
+	int res;
+
+	res = get_feature_report(hid, 0x09, buf, FEATURE_BUFFER_SIZE);
+	if (res < 21)
+		return -1;
+
+	*imu_config = *(rift_s_imu_config_t *)buf;
+
+	return 0;
+}
+
 int rift_s_hmd_enable (hid_device *hid, bool enable) {
 	uint8_t buf[3];
 	int res;
