@@ -284,9 +284,7 @@ static int getf_hmd(rift_s_hmd_t *hmd, ohmd_float_value type, float* out)
 	switch(type){
 	case OHMD_DISTORTION_K: {
 			for (int i = 0; i < 6; i++) {
-				//out[i] = hmd->display_info.distortion_k[i];
-				/* FIXME: report distortion params */
-				memset(out, 0, sizeof(float) * 6);
+				out[i] = 0.0; // hmd->display_info.distortion_k[i];
 			}
 			break;
 		}
@@ -420,10 +418,13 @@ static rift_s_hmd_t *open_hmd(ohmd_driver* driver, ohmd_device_desc* desc)
 	/* FIXME: These defaults should be replaced from device configuration */
 	hmd_dev->base.properties.hsize = 0.149760f;
 	hmd_dev->base.properties.vsize = 0.093600f;
-	hmd_dev->base.properties.lens_sep = 0.063500f;
+	hmd_dev->base.properties.lens_sep = 0.06350f;
 	hmd_dev->base.properties.lens_vpos = 0.046800f;
 	hmd_dev->base.properties.fov = DEG_TO_RAD(89.962739);
 
+	/* FIXME: Incorrection distortion taken from the Rift CV1 for now */
+	ohmd_set_universal_distortion_k(&(hmd_dev->base.properties), 0.098, .324, -0.241, 0.819);
+	ohmd_set_universal_aberration_k(&(hmd_dev->base.properties), 0.9952420, 1.0, 1.0008074);
 	hmd_dev->base.properties.hres = priv->device_info.h_resolution;
 	hmd_dev->base.properties.vres = priv->device_info.v_resolution;
 
