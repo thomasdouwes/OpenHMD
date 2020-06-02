@@ -160,7 +160,7 @@ handle_hmd_report (rift_s_hmd_t *priv, const unsigned char *buf, int size)
 		dt = (report.timestamp - priv->last_imu_timestamp) / 1000000.0f;
 	}
 
-	const float gyro_scale = priv->imu_config.gyro_scale / 32768.0;
+	const float gyro_scale = 1.0 / priv->imu_config.gyro_scale;
 	const float accel_scale = OHMD_GRAVITY_EARTH / priv->imu_config.accel_scale;
 	const float temperature_scale = 1.0 / priv->imu_config.temperature_scale;
 	const float temperature_offset = priv->imu_config.temperature_offset;
@@ -181,9 +181,9 @@ handle_hmd_report (rift_s_hmd_t *priv, const unsigned char *buf, int size)
 #endif
 		vec3f gyro, accel;
 
-		gyro.x = gyro_scale * s->gyro[0];
-		gyro.y = gyro_scale * s->gyro[1];
-		gyro.z = gyro_scale * s->gyro[2];
+		gyro.x = DEG_TO_RAD(gyro_scale * s->gyro[0]);
+		gyro.y = DEG_TO_RAD(gyro_scale * s->gyro[1]);
+		gyro.z = DEG_TO_RAD(gyro_scale * s->gyro[2]);
 
 		accel.x = accel_scale * s->accel[0];
 		accel.y = accel_scale * s->accel[1];
@@ -200,9 +200,14 @@ handle_hmd_report (rift_s_hmd_t *priv, const unsigned char *buf, int size)
 
 		priv->raw_accel = accel;
 		priv->raw_gyro = gyro;
-
 		/* FIXME: This doesn't seem to produce the right numbers, but it's OK - we don't use it anyway */
 		priv->temperature = temperature_scale * (s->temperature - temperature_offset) + 25;
+
+#if 0
+		printf ("Sample %d accel %f %f %f gyro %f %f %f\n",
+			i, priv->raw_accel.x, priv->raw_accel.y, priv->raw_accel.z,
+			priv->raw_gyro.x, priv->raw_gyro.y, priv->raw_gyro.z);
+#endif
 
 		ofusion_update(&priv->sensor_fusion, dt, &priv->raw_gyro, &priv->raw_accel, &priv->raw_mag);
 		dt = TICK_LEN;
