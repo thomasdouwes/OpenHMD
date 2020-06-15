@@ -418,13 +418,23 @@ static rift_s_hmd_t *open_hmd(ohmd_driver* driver, ohmd_device_desc* desc)
 	/* FIXME: These defaults should be replaced from device configuration */
 	hmd_dev->base.properties.hsize = 0.149760f;
 	hmd_dev->base.properties.vsize = 0.093600f;
-	hmd_dev->base.properties.lens_sep = 0.06350f;
+	hmd_dev->base.properties.lens_sep = 0.074f;
 	hmd_dev->base.properties.lens_vpos = 0.046800f;
-	hmd_dev->base.properties.fov = DEG_TO_RAD(89.962739);
+	hmd_dev->base.properties.fov = DEG_TO_RAD(105);
 
 	/* FIXME: Incorrection distortion taken from the Rift CV1 for now */
-	ohmd_set_universal_distortion_k(&(hmd_dev->base.properties), 0.098, .324, -0.241, 0.819);
+#if 1
+  ohmd_set_universal_distortion_k(&(hmd_dev->base.properties), 0.098, .324, -0.241, 0.819);
 	ohmd_set_universal_aberration_k(&(hmd_dev->base.properties), 0.9952420, 1.0, 1.0008074);
+#else
+  /* First pass at manual calibration */
+	double scale = 1.31;
+	double a = 0.049582 * scale, b = 0.221123 * scale, c = -0.174273 * scale;
+	double d = 1.0 - (a+b+c);
+	ohmd_set_universal_distortion_k(&(hmd_dev->base.properties), a, b, c, d);
+	ohmd_set_universal_aberration_k(&(hmd_dev->base.properties), 0.99043452, 1.0, 1.0073939);
+#endif
+
 	hmd_dev->base.properties.hres = priv->device_info.h_resolution;
 	hmd_dev->base.properties.vres = priv->device_info.v_resolution;
 
