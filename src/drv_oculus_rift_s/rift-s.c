@@ -153,11 +153,13 @@ handle_hmd_report (rift_s_hmd_t *priv, const unsigned char *buf, int size)
 		return;
 	}
 
-  const float TICK_LEN = 1.0 / priv->imu_config.imu_hz;
-	float dt = TICK_LEN;
+	const int32_t TICK_LEN_US = 1000000 / priv->imu_config.imu_hz;
+	int32_t dt = TICK_LEN_US;
+	uint32_t end_ts = report.timestamp;
 
 	if (priv->last_imu_timestamp != 0) {
-		dt = (report.timestamp - priv->last_imu_timestamp) / 1000000.0f;
+		dt = report.timestamp - priv->last_imu_timestamp;
+		end_ts -= dt;
 	}
 
 	const float gyro_scale = 1.0 / priv->imu_config.gyro_scale;
@@ -173,13 +175,14 @@ handle_hmd_report (rift_s_hmd_t *priv, const unsigned char *buf, int size)
 
 #if 0
 		if (i != 0) {
-		printf ("Sample %d accel %5d %5d %5d gyro %5d %5d %5d unk %u mark %2x \n",
+		printf ("Sample %d dt %f accel %5d %5d %5d gyro %5d %5d %5d unk %u mark %2x \n",
 			i, s->accel[0], s->accel[1], s->accel[2],
 			s->gyro[0], s->gyro[1], s->gyro[2],
 			s->unknown, s->marker);
 		}
 #endif
 		vec3f gyro, accel;
+		float dt_sec = dt / 1000000.0;
 
 		gyro.x = DEG_TO_RAD(gyro_scale * s->gyro[0]);
 		gyro.y = DEG_TO_RAD(gyro_scale * s->gyro[1]);
@@ -204,16 +207,17 @@ handle_hmd_report (rift_s_hmd_t *priv, const unsigned char *buf, int size)
 		priv->temperature = temperature_scale * (s->temperature - temperature_offset) + 25;
 
 #if 0
-		printf ("Sample %d accel %f %f %f gyro %f %f %f\n",
-			i, priv->raw_accel.x, priv->raw_accel.y, priv->raw_accel.z,
+		printf ("Sample %d dt %f accel %f %f %f gyro %f %f %f\n",
+			i, dt_sec, priv->raw_accel.x, priv->raw_accel.y, priv->raw_accel.z,
 			priv->raw_gyro.x, priv->raw_gyro.y, priv->raw_gyro.z);
 #endif
 
-		ofusion_update(&priv->sensor_fusion, dt, &priv->raw_gyro, &priv->raw_accel, &priv->raw_mag);
-		dt = TICK_LEN;
+		ofusion_update(&priv->sensor_fusion, dt_sec, &priv->raw_gyro, &priv->raw_accel, &priv->raw_mag);
+		end_ts += dt;
+		dt = TICK_LEN_US;
 	}
 
-	priv->last_imu_timestamp = report.timestamp;
+	priv->last_imu_timestamp = end_ts;
 }
 
 static void

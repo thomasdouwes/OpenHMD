@@ -159,7 +159,7 @@ typedef struct {
 typedef struct {
 		uint8_t cmd;
 		uint32_t imu_hz;
-		float gyro_scale; /* Gyro = reading / 32768 * gyro_scale */
+		float gyro_scale; /* Gyro = reading / gyro_scale - in degrees */
 		float accel_scale; /* Accel = reading * g / accel_scale */
 		float temperature_scale; /* Temperature = reading / scale + offset */
 		float temperature_offset;
