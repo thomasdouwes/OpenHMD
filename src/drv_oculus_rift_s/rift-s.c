@@ -175,7 +175,7 @@ handle_hmd_report (rift_s_hmd_t *priv, const unsigned char *buf, int size)
 
 #if 0
 		if (i != 0) {
-		printf ("Sample %d dt %f accel %5d %5d %5d gyro %5d %5d %5d unk %u mark %2x \n",
+		printf ("Sample %d accel %5d %5d %5d gyro %5d %5d %5d unk %u mark %2x \n",
 			i, s->accel[0], s->accel[1], s->accel[2],
 			s->gyro[0], s->gyro[1], s->gyro[2],
 			s->unknown, s->marker);
