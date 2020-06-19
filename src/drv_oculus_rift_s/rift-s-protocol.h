@@ -172,8 +172,9 @@ typedef enum {
 } rift_s_device_type;
 
 typedef struct {
-  uint64_t device_id;
-  uint32_t device_type;
+	uint64_t device_id;
+	uint32_t device_type;
+	uint64_t empty[2];
 } __attribute__((aligned(1), packed)) rift_s_device_type_record_t;
 
 /* The maximum number that can fit in a 200 byte report */

@@ -45,6 +45,9 @@ typedef struct {
   uint8_t capsense_joystick;
   uint8_t capsense_trigger;
 
+  uint8_t extra_bytes_len;
+  uint8_t extra_bytes[48];
+
 #if 0
 	bool have_calibration;
 	rift_touch_calibration calibration;

@@ -132,7 +132,7 @@ rift_s_parse_controller_report (rift_s_controller_report_t *report, const unsign
 }
 
 void rift_s_hexdump_buffer (const char *label, const unsigned char *buf, int length) {
-	int indent;
+	int indent = 0;
 	char ascii[17];
 
 	if (label)
@@ -433,7 +433,7 @@ int rift_s_read_devices_list (hid_device *handle, rift_s_devices_list_t *dev_lis
 
 	int res = get_feature_report(handle, 0x0c, buf, sizeof(buf));
 	if (res < 3) {
-		LOGW("Failed to read active devices list");
+		/* This happens when the Rift is just starting, we'll try again later */
 		return -1;
 	}
 
@@ -447,6 +447,8 @@ int rift_s_read_devices_list (hid_device *handle, rift_s_devices_list_t *dev_lis
 
 	for (int i = 0; i < num_records; i++) {
 		dev_list->devices[i] = *(rift_s_device_type_record_t *)(pos);
+		pos += sizeof(rift_s_device_type_record_t);
+		assert (sizeof(rift_s_device_type_record_t) == 28);
 	}
 	dev_list->num_devices = num_records;
 
