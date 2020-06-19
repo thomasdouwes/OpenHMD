@@ -165,6 +165,27 @@ typedef struct {
 		float temperature_offset;
 } __attribute__((aligned(1), packed)) rift_s_imu_config_t;
 
+typedef enum {
+    RIFT_S_DEVICE_TYPE_UNKNOWN = 0,
+    RIFT_S_DEVICE_LEFT_CONTROLLER = 0x13001101,
+    RIFT_S_DEVICE_RIGHT_CONTROLLER = 0x13011101,
+} rift_s_device_type;
+
+typedef struct {
+  uint64_t device_id;
+  uint32_t device_type;
+} __attribute__((aligned(1), packed)) rift_s_device_type_record_t;
+
+/* The maximum number that can fit in a 200 byte report */
+#define DEVICES_LIST_MAX_DEVICES 7
+
+typedef struct {
+	uint8_t num_devices;
+
+  rift_s_device_type_record_t devices[DEVICES_LIST_MAX_DEVICES];
+} rift_s_devices_list_t;
+
+/* FIXME: Rename this - report1 gets the firmware version */
 int rift_s_get_report1 (hid_device *hid);
 int rift_s_read_device_info (hid_device *hid, rift_s_device_info_t *device_info);
 int rift_s_read_imu_config (hid_device *hid, rift_s_imu_config_t *imu_config);
@@ -176,4 +197,7 @@ bool rift_s_parse_hmd_report (rift_s_hmd_report_t *report, const unsigned char *
 bool rift_s_parse_controller_report (rift_s_controller_report_t *report, const unsigned char *buf, int size);
 int rift_s_read_firmware_block (hid_device *handle, uint8_t block_id, char **data_out, int *len_out);
 
+int rift_s_read_devices_list (hid_device *handle, rift_s_devices_list_t *dev_list);
+
+void rift_s_hexdump_buffer (const char *label, const unsigned char *buf, int length); // Debugging
 #endif

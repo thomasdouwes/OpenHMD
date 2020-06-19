@@ -18,9 +18,7 @@
 #include <assert.h>
 
 #include "rift-s.h"
-#include "rift-s-protocol.h"
-#include "rift-s-firmware.h"
-#include "../hid.h"
+#include "rift-s-hmd.h"
 
 #define OHMD_GRAVITY_EARTH 9.80665 // m/s²
 
@@ -32,30 +30,6 @@
 #define RIFT_S_INTF_HMD 6
 #define RIFT_S_INTF_STATUS 7
 #define RIFT_S_INTF_CONTROLLERS 8
-
-typedef struct rift_s_hmd_s rift_s_hmd_t;
-
-struct rift_s_hmd_s {
-	ohmd_context* ctx;
-	int use_count;
-
-	hid_device* handles[3];
-
-	uint32_t last_imu_timestamp;
-	double last_keep_alive;
-	fusion sensor_fusion;
-	vec3f raw_mag, raw_accel, raw_gyro;
-	float temperature;
-
-	bool display_on;
-
-	/* OpenHMD output device */
-	rift_s_device_priv hmd_dev;
-
-	rift_s_device_info_t device_info;
-	rift_s_imu_config_t imu_config;
-	rift_s_imu_calibration imu_calibration;
-};
 
 typedef struct device_list_s device_list_t;
 struct device_list_s {
@@ -220,16 +194,6 @@ handle_hmd_report (rift_s_hmd_t *priv, const unsigned char *buf, int size)
 	priv->last_imu_timestamp = end_ts;
 }
 
-static void
-handle_controller_report (const unsigned char *buf, int size)
-{
-	rift_s_controller_report_t report;
-
-	if (!rift_s_parse_controller_report (&report, buf, size)) {
-		printf("Invalid Controller Report");
-	}
-}
-
 static void update_hmd(rift_s_hmd_t *priv)
 {
 	unsigned char buf[FEATURE_BUFFER_SIZE];
@@ -260,7 +224,7 @@ static void update_hmd(rift_s_hmd_t *priv)
 			if (buf[0] == 0x65)
 				handle_hmd_report (priv, buf, size);
 			else if (buf[0] == 0x67)
-				handle_controller_report (buf, size);
+				rift_s_handle_controller_report (priv, priv->handles[0], buf, size);
 			else if (buf[0] == 0x66) {
 				// System state packet. Enable the screen if the prox sensor is
 				// triggered

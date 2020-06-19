@@ -14,8 +14,9 @@
 
 #include "../openhmdi.h"
 
-typedef struct rift_s_hmd_s rift_s_hmd_t;
 typedef struct rift_s_device_priv_s rift_s_device_priv;
+typedef struct rift_s_hmd_s rift_s_hmd_t;
+typedef struct rift_s_controller_device_s rift_s_controller_device;
 
 struct rift_s_device_priv_s {
 	ohmd_device base;
@@ -23,6 +24,13 @@ struct rift_s_device_priv_s {
 	bool opened;
 
 	rift_s_hmd_t *hmd;
+};
+
+struct rift_s_controller_device_s {
+	rift_s_device_priv base;
+
+	/* Index into the controllers state array in the hmd_t struct, or -1 not found yet */
+	int device_num;
 };
 
 #endif

@@ -83,6 +83,7 @@ _drivers = get_option('drivers')
 if _drivers.contains('rift-s')
 	sources += [
 		'src/drv_oculus_rift_s/rift-s.c',
+		'src/drv_oculus_rift_s/rift-s-controller.c',
 		'src/drv_oculus_rift_s/rift-s-protocol.c',
 		'src/drv_oculus_rift_s/rift-s-firmware.c',
 		'src/ext_deps/nxjson.c',

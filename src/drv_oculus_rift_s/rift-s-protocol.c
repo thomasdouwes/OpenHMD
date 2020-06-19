@@ -131,7 +131,7 @@ rift_s_parse_controller_report (rift_s_controller_report_t *report, const unsign
 	return true;
 }
 
-static void hexdump_buffer (const char *label, const unsigned char *buf, int length) {
+void rift_s_hexdump_buffer (const char *label, const unsigned char *buf, int length) {
 	int indent;
 	char ascii[17];
 
@@ -276,7 +276,7 @@ int rift_s_read_firmware_block (hid_device *dev, uint8_t block_id,
 		if (outbuf[0] == '{' && outbuf[total_read-2] == '}' && outbuf[total_read-1] == 0)
 			printf ("%s\n", outbuf); // Dump JSON string
 		else
-			hexdump_buffer (label, outbuf, total_read);
+			rift_s_hexdump_buffer (label, outbuf, total_read);
 #endif
 	}
 
@@ -348,7 +348,7 @@ int rift_s_read_device_info (hid_device *hid, rift_s_device_info_t *device_info)
 		LOGE("Failed to read %d bytes of device info", FEATURE_BUFFER_SIZE);
 		return res;
 	}
-	hexdump_buffer ("device info", buf, res);
+	rift_s_hexdump_buffer ("device info", buf, res);
 
 	*device_info = *(rift_s_device_info_t *)buf;
 
@@ -365,7 +365,7 @@ int rift_s_get_report1 (hid_device *hid) {
 		return res;
 	}
 
-	hexdump_buffer ("report 1", buf, res);
+	rift_s_hexdump_buffer ("report 1", buf, res);
 	return 0;
 }
 
@@ -425,4 +425,30 @@ int rift_s_hmd_enable (hid_device *hid, bool enable) {
 	 * 2nd byte seems something to do with sync, but doesn't always work,
 	 * not sure why yet. */
 	return rift_s_send_camera_report (hid, enable, false);
+}
+
+int rift_s_read_devices_list (hid_device *handle, rift_s_devices_list_t *dev_list)
+{
+	unsigned char buf[200];
+
+	int res = get_feature_report(handle, 0x0c, buf, sizeof(buf));
+	if (res < 3) {
+		LOGW("Failed to read active devices list");
+		return -1;
+	}
+
+	int num_records = (res - 3) / 28;
+	if (num_records > buf[2])
+		num_records = buf[2];
+	if (num_records > DEVICES_LIST_MAX_DEVICES)
+		num_records = DEVICES_LIST_MAX_DEVICES;
+
+	unsigned char *pos = buf + 3;
+
+	for (int i = 0; i < num_records; i++) {
+		dev_list->devices[i] = *(rift_s_device_type_record_t *)(pos);
+	}
+	dev_list->num_devices = num_records;
+
+	return 0;
 }
