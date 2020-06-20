@@ -18,6 +18,7 @@
 #include "rift-s-protocol.h"
 #include "rift-s-firmware.h"
 #include "rift-s-controller.h"
+#include "rift-s-radio.h"
 
 #define MAX_CONTROLLERS 2
 
@@ -41,7 +42,10 @@ struct rift_s_hmd_s {
 
 	/* Controller state tracking */
 	int num_active_controllers;
-	rift_s_controller_state_t controllers[MAX_CONTROLLERS];
+	rift_s_controller_state controllers[MAX_CONTROLLERS];
+
+	/* Radio comms manager */
+  rift_s_radio_state radio_state;
 
 	/* OpenHMD output devices */
 	rift_s_device_priv hmd_dev;

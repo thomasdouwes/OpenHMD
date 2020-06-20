@@ -238,6 +238,8 @@ static void update_hmd(rift_s_hmd_t *priv)
 			 LOGW("Unknown Rift S report 0x%02x!", buf[0]);
 		}
 	}
+
+	rift_s_radio_update (&priv->radio_state, priv->handles[0]);
 }
 
 static void update_device(ohmd_device* device)
@@ -354,6 +356,8 @@ static rift_s_hmd_t *open_hmd(ohmd_driver* driver, ohmd_device_desc* desc)
 	}
 	hid = priv->handles[0];
 
+	rift_s_radio_state_init (&priv->radio_state, driver->ctx);
+
 	if (rift_s_read_device_info (hid, &priv->device_info) < 0) {
 			LOGE("Failed to read Rift S device info");
 			goto cleanup;
@@ -437,6 +441,8 @@ cleanup:
 
 static void close_hmd(rift_s_hmd_t *hmd)
 {
+	rift_s_radio_state_clear (&hmd->radio_state);
+
 	if (hmd->handles[0]) {
 		if (rift_s_hmd_enable (hmd->handles[0], true) < 0) {
 				LOGW("Failed to disable Rift S");

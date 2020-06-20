@@ -10,6 +10,7 @@
 #include <assert.h>
 
 #include "rift-s-hmd.h"
+#include "rift-s-radio.h"
 #include "rift-s-protocol.h"
 #include "rift-s-controller.h"
 
@@ -53,7 +54,7 @@ update_device_types (rift_s_hmd_t *hmd, hid_device *hid) {
 
 #if DUMP_CONTROLLER_STATE
 static void
-print_controller_state (rift_s_controller_state_t *ctrl)
+print_controller_state (rift_s_controller_state *ctrl)
 {
 	/* Dump the controller state if we see something unexpected / unknown, otherwise be quiet */
 	if (ctrl->device_type == 0)
@@ -96,7 +97,7 @@ print_controller_state (rift_s_controller_state_t *ctrl)
 #endif
 
 static void
-update_controller_state (rift_s_controller_state_t *ctrl, rift_s_controller_report_t *report)
+update_controller_state (rift_s_controller_state *ctrl, rift_s_controller_report_t *report)
 {
 #if DUMP_CONTROLLER_STATE
   bool saw_imu_update = false;
@@ -139,6 +140,14 @@ update_controller_state (rift_s_controller_state_t *ctrl, rift_s_controller_repo
 				break;
 			case RIFT_S_CTRL_IMU: {
 				int j;
+				const int32_t TICK_LEN_US = 1000000 / 500; // ctrl->config.imu_hz;
+				int32_t dt = TICK_LEN_US;
+
+				if (ctrl->imu_time_valid) {
+					dt = info->imu.timestamp - ctrl->imu_timestamp;
+				}
+
+				float dt_sec = dt / 1000000.0;
 
 #if DUMP_CONTROLLER_STATE
 				/* print the state before updating the IMU timestamp a 2nd time */
@@ -147,17 +156,20 @@ update_controller_state (rift_s_controller_state_t *ctrl, rift_s_controller_repo
 				saw_imu_update = true;
 #endif
 
-				ctrl->imu_timestamp = info->imu.timestamp;
 				ctrl->imu_unknown_varying2 = info->imu.unknown_varying2;
 				for (j = 0; j < 3; j++) {
 					ctrl->accel[j] = info->imu.accel[j];
 					ctrl->gyro[j] = info->imu.gyro[j];
 				}
+
+				//ofusion_update(&ctrl->imu_fusion, dt_sec, &priv->raw_gyro, &priv->raw_accel, &priv->raw_mag);
+				//printf ("dt = %f\n", dt_sec);
+				ctrl->imu_timestamp = info->imu.timestamp;
+				ctrl->imu_time_valid = true;
 				break;
 			}
 			default:
-				fprintf (stderr, "Oops - invalid info block with ID %02x\n", info->block_id);
-				assert ("Should not be reached!" == NULL);
+				LOGW ("Invalid controller info block with ID %02x. Please report it.\n", info->block_id);
 				break;
 		}
 	}
@@ -202,6 +214,54 @@ update_controller_state (rift_s_controller_state_t *ctrl, rift_s_controller_repo
 	ctrl->log_flags = report->flags;
 }
 
+
+static void
+ctrl_config_cb (bool success, uint8_t *response_bytes, int response_bytes_len, rift_s_controller_state *ctrl)
+{
+	if (!success) {
+		LOGW("Failed to read controller config");
+		return;
+	}
+
+	if (response_bytes_len < 5) {
+		LOGW("Failed to read controller config - short result");
+		return;
+	}
+
+  /* Response 0u32 0x10   00 7d a0 0f f4 01 f4 01 00 00 80 3a ff ff f9 3d
+   *   0x7d00 = 32000 0x0fa0 = 4000 0x01f4 = 500 0x01f4 = 500
+   *   0x3a800000 = 0.9765625e-03  = 1/1024
+   *   0x3df9ffff = 0.1220703      = 1/8192
+   */
+
+	response_bytes_len = response_bytes[4];
+	printf ("Have %d bytes of controller config\n", response_bytes_len);
+
+	LOGI ("Found new controller 0x%16lx type %08x\n", ctrl->device_id, ctrl->device_type);
+}
+
+static void
+ctrl_json_cb (bool success, uint8_t *response_bytes, int response_bytes_len, rift_s_controller_state *ctrl)
+{
+	if (!success) {
+		LOGW("Failed to read controller calibration block");
+		return;
+	}
+
+	printf ("Got Controller calibration:\n%s\n", response_bytes);
+}
+
+static void
+get_controller_configuration (rift_s_hmd_t *hmd, rift_s_controller_state *ctrl)
+{
+  const uint8_t config_req[] = { 0x32, 0x20, 0xe8, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+
+	rift_s_radio_queue_command (&hmd->radio_state, ctrl->device_id, config_req, sizeof(config_req),
+		(rift_s_radio_completion_fn) ctrl_config_cb, ctrl);
+	rift_s_radio_get_json_block (&hmd->radio_state, ctrl->device_id,
+		(rift_s_radio_completion_fn) ctrl_json_cb, ctrl);
+}
+
 void
 rift_s_handle_controller_report (rift_s_hmd_t *hmd, hid_device *hid, const unsigned char *buf, int size)
 {
@@ -217,7 +277,7 @@ rift_s_handle_controller_report (rift_s_hmd_t *hmd, hid_device *hid, const unsig
 	}
 
 	int i;
-	rift_s_controller_state_t *ctrl = NULL;
+	rift_s_controller_state *ctrl = NULL;
 
 	for (i = 0; i < hmd->num_active_controllers; i++) {
 		 if (hmd->controllers[i].device_id == report.device_id) {
@@ -236,10 +296,10 @@ rift_s_handle_controller_report (rift_s_hmd_t *hmd, hid_device *hid, const unsig
 		ctrl = hmd->controllers + hmd->num_active_controllers;
 		hmd->num_active_controllers++;
 
-		memset (ctrl, 0, sizeof (rift_s_controller_state_t));
+		memset (ctrl, 0, sizeof (rift_s_controller_state));
 		ctrl->device_id = report.device_id;
 		update_device_types (hmd, hid);
-		LOGI ("Found new controller 0x%16lx type %08x\n", report.device_id, ctrl->device_type);
+		get_controller_configuration (hmd, ctrl);
 	}
 
 	/* If we didn't already succeed in reading the type for this device, try again */

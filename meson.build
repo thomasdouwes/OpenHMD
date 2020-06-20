@@ -86,6 +86,7 @@ if _drivers.contains('rift-s')
 		'src/drv_oculus_rift_s/rift-s-controller.c',
 		'src/drv_oculus_rift_s/rift-s-protocol.c',
 		'src/drv_oculus_rift_s/rift-s-firmware.c',
+		'src/drv_oculus_rift_s/rift-s-radio.c',
 		'src/ext_deps/nxjson.c',
 	]
 	c_args += '-DDRIVER_OCULUS_RIFT_S'

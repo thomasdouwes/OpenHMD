@@ -165,6 +165,21 @@ typedef struct {
 		float temperature_offset;
 } __attribute__((aligned(1), packed)) rift_s_imu_config_t;
 
+/* Packet read from endpoint 11 (0x0b) */
+typedef struct {
+    uint8_t cmd;
+    uint8_t seqnum;
+    uint8_t busy_flag;
+    uint8_t response_bytes[197];
+} __attribute__((aligned(1), packed)) rift_s_hmd_radio_response_t;
+
+/* Struct for sending radio commands to 0x12 / 0x13 */
+typedef struct {
+    uint8_t cmd;
+    uint64_t device_id;
+    uint8_t cmd_bytes[52];
+} __attribute__((aligned(1), packed)) rift_s_hmd_radio_command_t;
+
 typedef enum {
     RIFT_S_DEVICE_TYPE_UNKNOWN = 0,
     RIFT_S_DEVICE_LEFT_CONTROLLER = 0x13001101,

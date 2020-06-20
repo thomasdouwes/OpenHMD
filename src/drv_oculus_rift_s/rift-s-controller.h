@@ -53,14 +53,7 @@ typedef struct {
 	rift_touch_calibration calibration;
 #endif
 	fusion imu_fusion;
-} rift_s_controller_state_t;
-
-typedef struct {
-	bool active_fw_read;
-	int last_radio_seqnum;
-	bool command_result_pending;
-	int read_command_idx;
-} rift_s_controller_fw_reader_state_t;
+} rift_s_controller_state;
 
 void rift_s_handle_controller_report (rift_s_hmd_t *hmd, hid_device *hid, const unsigned char *buf, int size);
 
