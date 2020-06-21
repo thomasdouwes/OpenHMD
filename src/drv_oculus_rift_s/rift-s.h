@@ -18,6 +18,8 @@ typedef struct rift_s_device_priv_s rift_s_device_priv;
 typedef struct rift_s_hmd_s rift_s_hmd_t;
 typedef struct rift_s_controller_device_s rift_s_controller_device;
 
+#define OHMD_GRAVITY_EARTH 9.80665 // m/s²
+
 struct rift_s_device_priv_s {
 	ohmd_device base;
 	int id;

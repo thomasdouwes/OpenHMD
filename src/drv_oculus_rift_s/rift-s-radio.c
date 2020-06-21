@@ -227,6 +227,8 @@ read_json_cb (bool success, uint8_t *response_bytes, int response_bytes_len, rif
 
 	/* If there is no more to read, then report success to the caller and return */
 	if (json_read->data_len >= json_read->block_len) {
+		json_read->data[json_read->data_len] = 0;
+
 		if (json_read->cb)
 			json_read->cb (true, json_read->data, json_read->data_len, json_read->cb_data);
 		free (json_read);

@@ -12,6 +12,16 @@
 #define MAX_LOG_SIZE 1024
 
 typedef struct {
+	uint16_t accel_limit;
+	uint16_t gyro_limit;
+	uint16_t accel_hz;
+	uint16_t gyro_hz;
+
+	float accel_scale;
+	float gyro_scale;
+} rift_s_controller_config;
+
+typedef struct {
   uint64_t device_id;
   uint32_t device_type;
 
@@ -25,8 +35,8 @@ typedef struct {
 	bool imu_time_valid;
   uint32_t imu_timestamp;
   uint16_t imu_unknown_varying2;
-  int16_t accel[3];
-  int16_t gyro[3];
+	int16_t raw_accel[3];
+	int16_t raw_gyro[3];
 
   /* 0x8, 0x0c 0x0d or 0xe block */
   uint8_t mask08;
@@ -48,10 +58,15 @@ typedef struct {
   uint8_t extra_bytes_len;
   uint8_t extra_bytes[48];
 
-#if 0
+	bool have_config;
+	rift_s_controller_config config;
+
 	bool have_calibration;
-	rift_touch_calibration calibration;
-#endif
+	rift_s_controller_imu_calibration calibration;
+
+  vec3f accel;
+  vec3f gyro;
+  vec3f mag;
 	fusion imu_fusion;
 } rift_s_controller_state;
 

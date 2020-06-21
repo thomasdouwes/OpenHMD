@@ -9,6 +9,7 @@
 #include <string.h>
 #include <assert.h>
 
+#include "rift-s.h"
 #include "rift-s-hmd.h"
 #include "rift-s-radio.h"
 #include "rift-s-protocol.h"
@@ -65,8 +66,8 @@ print_controller_state (rift_s_controller_state *ctrl)
 
   printf ("Controller %16lx type 0x%08x IMU ts %8u v2 %x accel %6d %6d %6d gyro %6d %6d %6d | ",
       ctrl->device_id, ctrl->device_type, ctrl->imu_timestamp, ctrl->imu_unknown_varying2,
-      ctrl->accel[0], ctrl->accel[1], ctrl->accel[2],
-      ctrl->gyro[0], ctrl->gyro[1], ctrl->gyro[2]);
+      ctrl->raw_accel[0], ctrl->raw_accel[1], ctrl->raw_accel[2],
+      ctrl->raw_gyro[0], ctrl->raw_gyro[1], ctrl->raw_gyro[2]);
 
   printf ("unk %02x %02x buttons %02x fingers %02x | ",
       ctrl->mask08, ctrl->mask0e, ctrl->buttons, ctrl->fingers);
@@ -95,6 +96,65 @@ print_controller_state (rift_s_controller_state *ctrl)
   printf("\n");
 }
 #endif
+
+static void
+vec3f_rotate_3x3(vec3f *vec, float rot[3][3])
+{
+	vec3f in = *vec;
+	for (int i = 0; i < 3; i++)
+		vec->arr[i] = rot[i][0] * in.arr[0] + rot[i][1] * in.arr[1] + rot[i][2] * in.arr[2];
+}
+
+static void
+handle_imu_update (rift_s_controller_state *ctrl, uint32_t imu_timestamp, const int16_t raw_accel[3], const int16_t raw_gyro[3])
+{
+	int32_t dt = 0;
+
+	if (ctrl->imu_time_valid)
+		dt = imu_timestamp - ctrl->imu_timestamp;
+
+	ctrl->imu_timestamp = imu_timestamp;
+	ctrl->imu_time_valid = true;
+
+	if (!ctrl->have_calibration || !ctrl->have_config)
+		return; /* We need to finish reading the calibration or config blocks first */
+
+	/* If this is the first IMU update, use default interval */
+	if (dt == 0)
+		dt = 1000000 / ctrl->config.accel_hz;
+
+	float dt_sec = dt / 1000000.0;
+
+	const float gyro_scale = ctrl->config.gyro_scale;
+	const float accel_scale = OHMD_GRAVITY_EARTH * ctrl->config.accel_scale;
+
+	ctrl->gyro.x = DEG_TO_RAD(gyro_scale * raw_gyro[0]);
+	ctrl->gyro.y = DEG_TO_RAD(gyro_scale * raw_gyro[1]);
+	ctrl->gyro.z = DEG_TO_RAD(gyro_scale * raw_gyro[2]);
+
+	ctrl->accel.x = accel_scale * raw_accel[0];
+	ctrl->accel.y = accel_scale * raw_accel[1];
+	ctrl->accel.z = accel_scale * raw_accel[2];
+
+	/* Apply correction offsets first, then rectify */
+	for (int j = 0; j < 3; j++) {
+		ctrl->accel.arr[j] -= ctrl->calibration.accel.offset.arr[j];
+		ctrl->gyro.arr[j] -= ctrl->calibration.gyro.offset.arr[j];
+	}
+
+	vec3f_rotate_3x3(&ctrl->accel, ctrl->calibration.accel.rectification);
+	vec3f_rotate_3x3(&ctrl->gyro, ctrl->calibration.gyro.rectification);
+
+	ofusion_update(&ctrl->imu_fusion, dt_sec, &ctrl->gyro, &ctrl->accel, &ctrl->mag);
+#if 0
+	printf ("dt = %f raw accel %d %d %d gyro %d %d %d -> accel %f %f %f  gyro %f %f %f\n",
+			dt_sec,
+			raw_accel[0], raw_accel[1], raw_accel[2],
+			raw_gyro[0], raw_gyro[1], raw_gyro[2],
+			ctrl->accel.x, ctrl->accel.y, ctrl->accel.z,
+			ctrl->gyro.x, ctrl->gyro.y, ctrl->gyro.z);
+#endif
+}
 
 static void
 update_controller_state (rift_s_controller_state *ctrl, rift_s_controller_report_t *report)
@@ -140,14 +200,6 @@ update_controller_state (rift_s_controller_state *ctrl, rift_s_controller_report
 				break;
 			case RIFT_S_CTRL_IMU: {
 				int j;
-				const int32_t TICK_LEN_US = 1000000 / 500; // ctrl->config.imu_hz;
-				int32_t dt = TICK_LEN_US;
-
-				if (ctrl->imu_time_valid) {
-					dt = info->imu.timestamp - ctrl->imu_timestamp;
-				}
-
-				float dt_sec = dt / 1000000.0;
 
 #if DUMP_CONTROLLER_STATE
 				/* print the state before updating the IMU timestamp a 2nd time */
@@ -157,15 +209,12 @@ update_controller_state (rift_s_controller_state *ctrl, rift_s_controller_report
 #endif
 
 				ctrl->imu_unknown_varying2 = info->imu.unknown_varying2;
-				for (j = 0; j < 3; j++) {
-					ctrl->accel[j] = info->imu.accel[j];
-					ctrl->gyro[j] = info->imu.gyro[j];
-				}
 
-				//ofusion_update(&ctrl->imu_fusion, dt_sec, &priv->raw_gyro, &priv->raw_accel, &priv->raw_mag);
-				//printf ("dt = %f\n", dt_sec);
-				ctrl->imu_timestamp = info->imu.timestamp;
-				ctrl->imu_time_valid = true;
+				for (j = 0; j < 3; j++) {
+					ctrl->raw_accel[j] = info->imu.accel[j];
+					ctrl->raw_gyro[j] = info->imu.gyro[j];
+				}
+				handle_imu_update (ctrl, info->imu.timestamp, ctrl->raw_accel, ctrl->raw_gyro);
 				break;
 			}
 			default:
@@ -214,6 +263,9 @@ update_controller_state (rift_s_controller_state *ctrl, rift_s_controller_report
 	ctrl->log_flags = report->flags;
 }
 
+#define READ_LE16(b) (b)[0]| ((b)[1]) << 8
+#define READ_LE32(b) (b)[0]| ((b)[1]) << 8 | ((b)[2]) << 16 | ((b)[3]) << 24
+#define READ_LEFLOAT32(b) (*(float *)(b));
 
 static void
 ctrl_config_cb (bool success, uint8_t *response_bytes, int response_bytes_len, rift_s_controller_state *ctrl)
@@ -235,9 +287,22 @@ ctrl_config_cb (bool success, uint8_t *response_bytes, int response_bytes_len, r
    */
 
 	response_bytes_len = response_bytes[4];
-	printf ("Have %d bytes of controller config\n", response_bytes_len);
+	if (response_bytes_len < 16) {
+		LOGE("Failed to read controller config block - only got %d bytes\n", response_bytes_len);
+		return;
+	}
+	response_bytes += 5;
 
 	LOGI ("Found new controller 0x%16lx type %08x\n", ctrl->device_id, ctrl->device_type);
+
+	ctrl->config.accel_limit = READ_LE16(response_bytes + 0);
+	ctrl->config.gyro_limit = READ_LE16(response_bytes + 2);
+	ctrl->config.accel_hz = READ_LE16(response_bytes + 4);
+	ctrl->config.gyro_hz = READ_LE16(response_bytes + 6);
+	ctrl->config.accel_scale = READ_LEFLOAT32(response_bytes + 8);
+	ctrl->config.gyro_scale = READ_LEFLOAT32(response_bytes + 12);
+
+	ctrl->have_config = true;
 }
 
 static void
@@ -248,7 +313,14 @@ ctrl_json_cb (bool success, uint8_t *response_bytes, int response_bytes_len, rif
 		return;
 	}
 
-	printf ("Got Controller calibration:\n%s\n", response_bytes);
+	// LOGD ("Got Controller calibration:\n%s\n", response_bytes);
+
+	if (rift_s_controller_parse_imu_calibration((char *) response_bytes, &ctrl->calibration) == 0) {
+		ctrl->have_calibration = true;
+	}
+	else {
+		LOGE ("Failed to parse controller configuration for controller 0x%16lx\n", ctrl->device_id);
+	}
 }
 
 static void
@@ -288,7 +360,7 @@ rift_s_handle_controller_report (rift_s_hmd_t *hmd, hid_device *hid, const unsig
 
 	if (ctrl == NULL) {
 		if (hmd->num_active_controllers == MAX_CONTROLLERS) {
-			fprintf (stderr, "Too many controllers. Can't add %08lx\n", report.device_id);
+			LOGE ("Too many controllers. Can't add %08lx\n", report.device_id);
 			return;
 		}
 
@@ -298,6 +370,8 @@ rift_s_handle_controller_report (rift_s_hmd_t *hmd, hid_device *hid, const unsig
 
 		memset (ctrl, 0, sizeof (rift_s_controller_state));
 		ctrl->device_id = report.device_id;
+		ofusion_init(&ctrl->imu_fusion);
+
 		update_device_types (hmd, hid);
 		get_controller_configuration (hmd, ctrl);
 	}

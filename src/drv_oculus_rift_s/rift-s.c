@@ -20,8 +20,6 @@
 #include "rift-s.h"
 #include "rift-s-hmd.h"
 
-#define OHMD_GRAVITY_EARTH 9.80665 // m/s²
-
 #define UDEV_WIKI_URL "https://github.com/OpenHMD/OpenHMD/wiki/Udev-rules-list"
 #define OCULUS_VR_INC_ID 0x2833
 #define RIFT_S_PID 0x0051
