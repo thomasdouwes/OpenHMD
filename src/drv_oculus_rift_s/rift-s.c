@@ -243,12 +243,28 @@ static void update_hmd(rift_s_hmd_t *priv)
 static void update_device(ohmd_device* device)
 {
 	rift_s_device_priv* dev_priv = rift_s_device_priv_get(device);
+	rift_s_hmd_t *hmd = dev_priv->hmd;
+
+	/* Update on whichever is the lowest open id device */
+	if (dev_priv->id == 2) {
+		if (hmd->hmd_dev.opened)
+			return;
+		if (hmd->touch_dev[0].base.opened)
+			return;
+	}
+	else if (dev_priv->id == 1) {
+		if (hmd->hmd_dev.opened)
+			return;
+	}
 
 	update_hmd (dev_priv->hmd);
 }
 
-static int getf_hmd(rift_s_hmd_t *hmd, ohmd_float_value type, float* out)
+static int getf_hmd(ohmd_device* device, ohmd_float_value type, float* out)
 {
+	rift_s_device_priv* dev_priv = rift_s_device_priv_get(device);
+	rift_s_hmd_t *hmd = dev_priv->hmd;
+
 	switch(type){
 	case OHMD_DISTORTION_K: {
 			for (int i = 0; i < 6; i++) {
@@ -278,13 +294,44 @@ static int getf_hmd(rift_s_hmd_t *hmd, ohmd_float_value type, float* out)
 	return 0;
 }
 
-static int getf(ohmd_device* device, ohmd_float_value type, float* out)
+static int getf_touch_controller(ohmd_device *device, ohmd_float_value type, float* out)
 {
 	rift_s_device_priv* dev_priv = rift_s_device_priv_get(device);
-	if (dev_priv->id == 0)
-		return getf_hmd (dev_priv->hmd, type, out);
+	rift_s_hmd_t *hmd = dev_priv->hmd;
+	rift_s_controller_device *touch = (rift_s_controller_device *)(dev_priv);
 
-	return -1;
+	if (touch->device_num < 0)
+		return -1; /* Device not online yet */
+
+	rift_s_controller_state *ctrl = hmd->controllers + touch->device_num;
+
+	switch(type){
+	case OHMD_ROTATION_QUAT: {
+			*(quatf*)out = ctrl->imu_fusion.orient;
+			break;
+		}
+	case OHMD_POSITION_VECTOR:
+		out[0] = out[1] = out[2] = 0;
+		break;
+	case OHMD_DISTORTION_K:
+		return -1;
+	case OHMD_CONTROLS_STATE:
+		out[0] = (ctrl->buttons & RIFT_S_BUTTON_A) != 0;
+		out[1] = (ctrl->buttons & RIFT_S_BUTTON_B) != 0;
+		out[2] = (ctrl->buttons & RIFT_S_BUTTON_OCULUS) != 0;
+		out[3] = (ctrl->buttons & RIFT_S_BUTTON_STICK) != 0;
+
+		out[4] = (float)(ctrl->trigger) / 65535.0;
+		out[5] = (float)(ctrl->grip) / 65535.0;
+		out[6] = (float)(ctrl->joystick_x) / 32768.0; /* FIXME: Scale this properly */
+		out[7] = (float)(ctrl->joystick_y) / 32768.0; /* FIXME: Scale this properly */
+		break;
+	default:
+		ohmd_set_error(hmd->ctx, "invalid type given to getf (%u)", type);
+		return -1;
+	}
+
+	return 0;
 }
 
 static void close_device(ohmd_device* device)
@@ -324,6 +371,43 @@ static int read_calibration (rift_s_hmd_t *hmd, hid_device *hid) {
 	free(json);
 
 	return ret;
+}
+
+static void init_touch_device(rift_s_controller_device *touch, int id)
+{
+	ohmd_device *ohmd_dev = &touch->base.base;
+
+	touch->device_num = -1;
+
+	ohmd_set_default_device_properties(&ohmd_dev->properties);
+
+	ohmd_dev->properties.control_count = 8;
+
+	if (id == 0) {
+		ohmd_dev->properties.controls_hints[0] = OHMD_BUTTON_A;
+		ohmd_dev->properties.controls_hints[1] = OHMD_BUTTON_B;
+		ohmd_dev->properties.controls_hints[2] = OHMD_HOME; // Oculus button
+		ohmd_dev->properties.controls_hints[3] = OHMD_ANALOG_PRESS; // stick button
+	} else {
+		ohmd_dev->properties.controls_hints[0] = OHMD_BUTTON_X;
+		ohmd_dev->properties.controls_hints[1] = OHMD_BUTTON_Y;
+		ohmd_dev->properties.controls_hints[2] = OHMD_MENU;
+		ohmd_dev->properties.controls_hints[3] = OHMD_ANALOG_PRESS; // stick button
+	}
+	ohmd_dev->properties.controls_hints[4] = OHMD_TRIGGER;
+	ohmd_dev->properties.controls_hints[5] = OHMD_SQUEEZE;
+	ohmd_dev->properties.controls_hints[6] = OHMD_ANALOG_X;
+	ohmd_dev->properties.controls_hints[7] = OHMD_ANALOG_Y;
+
+	ohmd_dev->properties.controls_types[0] = OHMD_DIGITAL;
+	ohmd_dev->properties.controls_types[1] = OHMD_DIGITAL;
+	ohmd_dev->properties.controls_types[2] = OHMD_DIGITAL;
+	ohmd_dev->properties.controls_types[3] = OHMD_DIGITAL;
+
+	ohmd_dev->properties.controls_types[4] = OHMD_ANALOG;
+	ohmd_dev->properties.controls_types[5] = OHMD_ANALOG;
+	ohmd_dev->properties.controls_types[6] = OHMD_ANALOG;
+	ohmd_dev->properties.controls_types[7] = OHMD_ANALOG;
 }
 
 static rift_s_hmd_t *open_hmd(ohmd_driver* driver, ohmd_device_desc* desc)
@@ -424,6 +508,10 @@ static rift_s_hmd_t *open_hmd(ohmd_driver* driver, ohmd_device_desc* desc)
 	// initialize sensor fusion
 	ofusion_init(&priv->sensor_fusion);
 
+	// Init touch devices 
+	for (int i = 0; i < MAX_CONTROLLERS; i++)
+		init_touch_device (priv->touch_dev + i, i);
+
 	if (rift_s_hmd_enable (hid, true) < 0) {
 			LOGE("Failed to enable Rift S");
 			goto cleanup;
@@ -512,6 +600,9 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 
 	if (desc->id == 0)
 		dev = &hmd->hmd_dev;
+	else if (desc->id <= MAX_CONTROLLERS) {
+		dev = &hmd->touch_dev[desc->id-1].base;
+	}
 	else {
 		LOGE ("Invalid device description passed to open_device()");
 		return NULL;
@@ -524,7 +615,10 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 
 	dev->base.update = update_device;
 	dev->base.close = close_device;
-	dev->base.getf = getf;
+	if (desc->id == 0)
+		dev->base.getf = getf_hmd;
+	else
+		dev->base.getf = getf_touch_controller;
 
 	return &dev->base;
 }
@@ -560,6 +654,44 @@ static void get_device_list(ohmd_driver* driver, ohmd_device_list* list)
 
 				strcpy(desc->path, cur_dev->path);
 
+				desc->driver_ptr = driver;
+				desc->id = id++;
+
+				//Controller 0 (left)
+				desc = &list->devices[list->num_devices++];
+				desc->revision = 0;
+
+				strcpy(desc->driver, "OpenHMD Rift Driver");
+				strcpy(desc->vendor, "Oculus VR, Inc.");
+				sprintf(desc->product, "%s: Left Controller", rd[i].name);
+
+				strcpy(desc->path, cur_dev->path);
+
+				desc->device_flags =
+					//OHMD_DEVICE_FLAGS_POSITIONAL_TRACKING |
+					OHMD_DEVICE_FLAGS_ROTATIONAL_TRACKING |
+					OHMD_DEVICE_FLAGS_LEFT_CONTROLLER;
+
+				desc->device_class = OHMD_DEVICE_CLASS_CONTROLLER;
+				desc->driver_ptr = driver;
+				desc->id = id++;
+
+				// Controller 1 (right)
+				desc = &list->devices[list->num_devices++];
+				desc->revision = 0;
+
+				strcpy(desc->driver, "OpenHMD Rift Driver");
+				strcpy(desc->vendor, "Oculus VR, Inc.");
+				sprintf(desc->product, "%s: Right Controller", rd[i].name);
+
+				strcpy(desc->path, cur_dev->path);
+
+				desc->device_flags =
+					//OHMD_DEVICE_FLAGS_POSITIONAL_TRACKING |
+					OHMD_DEVICE_FLAGS_ROTATIONAL_TRACKING |
+					OHMD_DEVICE_FLAGS_RIGHT_CONTROLLER;
+
+				desc->device_class = OHMD_DEVICE_CLASS_CONTROLLER;
 				desc->driver_ptr = driver;
 				desc->id = id++;
 			}
