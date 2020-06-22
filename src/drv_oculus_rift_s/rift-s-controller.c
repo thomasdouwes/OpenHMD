@@ -289,6 +289,7 @@ ctrl_config_cb (bool success, uint8_t *response_bytes, int response_bytes_len, r
 	response_bytes_len = response_bytes[4];
 	if (response_bytes_len < 16) {
 		LOGE("Failed to read controller config block - only got %d bytes\n", response_bytes_len);
+		rift_s_hexdump_buffer ("Controller Config", response_bytes, response_bytes_len);
 		return;
 	}
 	response_bytes += 5;
