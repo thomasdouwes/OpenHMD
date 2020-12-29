@@ -560,12 +560,14 @@ rift_tracker_frame_release (rift_tracker_ctx *ctx, uint64_t local_ts, uint64_t f
 		 * recently came online */
 		if (info && i < info->n_devices) {
 			rift_tracked_device_exposure_info *dev_info = info->devices + i;
+
+			fusion_slot = dev_info->fusion_slot;
 			rift_tracked_device_exposure_release_locked(dev, dev_info);
 
 			fusion_slot = dev_info->fusion_slot;
 		}
 
-		rift_tracked_device_send_debug_printf (dev, local_ts,
+		rift_tracked_device_send_debug_printf(dev, local_ts,
 			"{ \"type\": \"frame-release\", \"local-ts\": %llu, "
 			"\"frame-local-ts\": %llu, \"source\": \"%s\", \"delay-slot\": %d }",
 			(unsigned long long) local_ts, (unsigned long long) frame_local_ts, source,
@@ -592,6 +594,7 @@ rift_tracker_free (rift_tracker_ctx *tracker_ctx)
 		rift_tracked_device_priv *dev = tracker_ctx->devices + i;
 		if (dev->base.led_search)
 			led_search_model_free (dev->base.led_search);
+
 		if (dev->debug_metadata != NULL)
 			ohmd_pw_debug_stream_free (dev->debug_metadata);
 		if (dev->debug_metadata_gst != NULL)
