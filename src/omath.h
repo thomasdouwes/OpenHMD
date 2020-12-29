@@ -18,52 +18,52 @@
 #endif
 
 #define POW2(_x) ((_x) * (_x))
-#define RAD_TO_DEG(_r) ((_r) * 360.0f / (2.0f * (float)M_PI))
-#define DEG_TO_RAD(_d) ((_d) * (2.0f * (float)M_PI) / 360.0f)
+#define RAD_TO_DEG(_r) ((_r) * 360.0f / (2.0f * (double)M_PI))
+#define DEG_TO_RAD(_d) ((_d) * (2.0f * (double)M_PI) / 360.0f)
 
 
 // vector
 
-typedef union { 
-	struct { 
-		float x, y, z; 
-	}; 
-	float arr[3]; 
+typedef union {
+	struct {
+		double x, y, z;
+	};
+	double arr[3];
 } vec3f;
 
-void ovec3f_set(vec3f* me, float x, float y, float z);
+void ovec3f_set(vec3f* me, double x, double y, double z);
 void ovec3f_normalize_me(vec3f* me);
-float ovec3f_get_length(const vec3f* me);
-float ovec3f_get_angle(const vec3f* me, const vec3f* vec); 
-float ovec3f_get_dot(const vec3f* me, const vec3f* vec);
+double ovec3f_get_length(const vec3f* me);
+double ovec3f_get_angle(const vec3f* me, const vec3f* vec);
+double ovec3f_get_dot(const vec3f* me, const vec3f* vec);
 void ovec3f_cross(const vec3f* a, const vec3f* b, vec3f *out);
 void ovec3f_subtract(const vec3f* a, const vec3f* b, vec3f* out);
 void ovec3f_add(const vec3f* a, const vec3f* b, vec3f* out);
 void ovec3f_inverse(vec3f *me);
-void ovec3f_multiply_scalar (const vec3f* a, const float s, vec3f* out);
+void ovec3f_multiply_scalar (const vec3f* a, const double s, vec3f* out);
 
 
 // quaternion
 
-typedef union { 
-	struct { 
-		float x, y, z, w; 
-	}; 
-	float arr[4]; 
+typedef union {
+	struct {
+		double x, y, z, w;
+	};
+	double arr[4];
 } quatf;
 
-void oquatf_init_axis(quatf* me, const vec3f* vec, float angle);
+void oquatf_init_axis(quatf* me, const vec3f* vec, double angle);
 
 void oquatf_get_rotated(const quatf* me, const vec3f* vec, vec3f* out_vec);
 void oquatf_mult_me(quatf* me, const quatf* q);
 void oquatf_mult(const quatf* me, const quatf* q, quatf* out_q);
 void oquatf_diff(const quatf* me, const quatf* q, quatf* out_q);
 void oquatf_normalize_me(quatf* me);
-float oquatf_get_length(const quatf* me);
-float oquatf_get_dot(const quatf* me, const quatf* q);
+double oquatf_get_length(const quatf* me);
+double oquatf_get_dot(const quatf* me, const quatf* q);
 void oquatf_inverse(quatf* me);
 
-void oquatf_get_mat4x4(const quatf* me, const vec3f* point, float mat[4][4]);
+void oquatf_get_mat4x4(const quatf* me, const vec3f* point, double mat[4][4]);
 void oquatf_get_euler_angles(const quatf* me, vec3f* angles);
 void oquatf_from_euler_angles(quatf* me, const vec3f* angles);
 
@@ -78,20 +78,20 @@ void oposef_inverse(posef *me);
 void oposef_mirror_XZ(posef *me);
 void oposef_apply(const posef *me, const posef *xform, posef *dest);
 void oposef_apply_inverse(const posef *me, const posef *xform, posef *dest);
-void oposef_get_mat4x4(const posef* me, float mat[4][4]);
+void oposef_get_mat4x4(const posef* me, double mat[4][4]);
 
 // matrix
 
 typedef union {
-	float m[4][4];
-	float arr[16];
+	double m[4][4];
+	double arr[16];
 } mat4x4f;
 
 void omat4x4f_init_ident(mat4x4f* me);
-void omat4x4f_init_perspective(mat4x4f* me, float fov_rad, float aspect, float znear, float zfar);
-void omat4x4f_init_frustum(mat4x4f* me, float left, float right, float bottom, float top, float znear, float zfar);
+void omat4x4f_init_perspective(mat4x4f* me, double fov_rad, double aspect, double znear, double zfar);
+void omat4x4f_init_frustum(mat4x4f* me, double left, double right, double bottom, double top, double znear, double zfar);
 void omat4x4f_init_look_at(mat4x4f* me, const quatf* ret, const vec3f* eye);
-void omat4x4f_init_translate(mat4x4f* me, float x, float y, float z);
+void omat4x4f_init_translate(mat4x4f* me, double x, double y, double z);
 void omat4x4f_mult(const mat4x4f* left, const mat4x4f* right, mat4x4f* out_mat);
 void omat4x4f_transpose(const mat4x4f* me, mat4x4f* out_mat);
 

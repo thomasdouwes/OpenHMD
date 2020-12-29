@@ -12,16 +12,16 @@
 #include "openhmdi.h"
 
 // vector
-void ovec3f_set(vec3f* me, float x, float y, float z)
+void ovec3f_set(vec3f* me, double x, double y, double z)
 {
 	me->x = x;
 	me->y = y;
 	me->z = z;
 }
 
-float ovec3f_get_length(const vec3f* me)
+double ovec3f_get_length(const vec3f* me)
 {
-	return sqrtf(POW2(me->x) + POW2(me->y) + POW2(me->z));
+	return sqrt(POW2(me->x) + POW2(me->y) + POW2(me->z));
 }
 
 void ovec3f_normalize_me(vec3f* me)
@@ -29,7 +29,7 @@ void ovec3f_normalize_me(vec3f* me)
 	if(me->x == 0 && me->y == 0 && me->z == 0)
 		return;
 
-	float len = ovec3f_get_length(me);
+	double len = ovec3f_get_length(me);
 	me->x /= len;
 	me->y /= len;
 	me->z /= len;
@@ -60,15 +60,15 @@ void ovec3f_inverse(vec3f *me)
 		me->arr[i] = -me->arr[i];
 }
 
-float ovec3f_get_dot(const vec3f* me, const vec3f* vec)
+double ovec3f_get_dot(const vec3f* me, const vec3f* vec)
 {
 	return me->x * vec->x + me->y * vec->y + me->z * vec->z;
 }
 
-float ovec3f_get_angle(const vec3f* me, const vec3f* vec)
+double ovec3f_get_angle(const vec3f* me, const vec3f* vec)
 {
-	float dot = ovec3f_get_dot(me, vec);
-	float lengths = ovec3f_get_length(me) * ovec3f_get_length(vec);
+	double dot = ovec3f_get_dot(me, vec);
+	double lengths = ovec3f_get_length(me) * ovec3f_get_length(vec);
 
 	if(lengths == 0)
 		return 0;
@@ -78,10 +78,10 @@ float ovec3f_get_angle(const vec3f* me, const vec3f* vec)
 	if (dot >= 1.0 || dot <= -1.0)
 		return 0.0;
 
-	return acosf(dot);
+	return acos(dot);
 }
 
-void ovec3f_multiply_scalar (const vec3f* a, const float s, vec3f* out)
+void ovec3f_multiply_scalar (const vec3f* a, const double s, vec3f* out)
 {
 	out->x = a->x * s;
 	out->y = a->y * s;
@@ -90,15 +90,15 @@ void ovec3f_multiply_scalar (const vec3f* a, const float s, vec3f* out)
 
 // quaternion
 
-void oquatf_init_axis(quatf* me, const vec3f* vec, float angle)
+void oquatf_init_axis(quatf* me, const vec3f* vec, double angle)
 {
 	vec3f norm = *vec;
 	ovec3f_normalize_me(&norm);
 
-	me->x = norm.x * sinf(angle / 2.0f);
-	me->y = norm.y * sinf(angle / 2.0f);
-	me->z = norm.z * sinf(angle / 2.0f);
-	me->w = cosf(angle / 2.0f);
+	me->x = norm.x * sin(angle / 2.0f);
+	me->y = norm.y * sin(angle / 2.0f);
+	me->z = norm.z * sin(angle / 2.0f);
+	me->w = cos(angle / 2.0f);
 }
 
 void oquatf_get_rotated(const quatf* me, const vec3f* vec, vec3f* out_vec)
@@ -132,26 +132,26 @@ void oquatf_mult_me(quatf* me, const quatf* q)
 
 void oquatf_normalize_me(quatf* me)
 {
-	float len = oquatf_get_length(me);
+	double len = oquatf_get_length(me);
 	me->x /= len;
 	me->y /= len;
 	me->z /= len;
 	me->w /= len;
 }
 
-float oquatf_get_length(const quatf* me)
+double oquatf_get_length(const quatf* me)
 {
-	return sqrtf(me->x * me->x + me->y * me->y + me->z * me->z + me->w * me->w);
+	return sqrt(me->x * me->x + me->y * me->y + me->z * me->z + me->w * me->w);
 }
 
-float oquatf_get_dot(const quatf* me, const quatf* q)
+double oquatf_get_dot(const quatf* me, const quatf* q)
 {
 	return me->x * q->x + me->y * q->y + me->z * q->z + me->w * q->w;
 }
 
 void oquatf_inverse(quatf* me)
 {
-	float dot = oquatf_get_dot(me, me);
+	double dot = oquatf_get_dot(me, me);
 
 	// conjugate
 	for(int i = 0; i < 3; i++)
@@ -168,9 +168,9 @@ void oquatf_diff(const quatf* me, const quatf* q, quatf* out_q)
 	oquatf_mult(&inv, q, out_q);
 }
 
-void oquatf_slerp (float fT, const quatf* rkP, const quatf* rkQ, bool shortestPath, quatf* out_q)
+void oquatf_slerp (double fT, const quatf* rkP, const quatf* rkQ, bool shortestPath, quatf* out_q)
 {
-	float fCos = oquatf_get_dot(rkP, rkQ);
+	double fCos = oquatf_get_dot(rkP, rkQ);
 	quatf rkT;
 
 	// Do we need to invert rotation?
@@ -185,14 +185,14 @@ void oquatf_slerp (float fT, const quatf* rkP, const quatf* rkQ, bool shortestPa
 		rkT = *rkQ;
 	}
 
-	if (fabsf(fCos) < 1 - 0.001f)
+	if (fabs(fCos) < 1 - 0.001f)
 	{
 		// Standard case (slerp)
-		float fSin = sqrtf(1 - (fCos*fCos));
-		float fAngle = atan2f(fSin, fCos); 
-		float fInvSin = 1.0f / fSin;
-		float fCoeff0 = sin((1.0f - fT) * fAngle) * fInvSin;
-		float fCoeff1 = sin(fT * fAngle) * fInvSin;
+		double fSin = sqrt(1 - (fCos*fCos));
+		double fAngle = atan2(fSin, fCos);
+		double fInvSin = 1.0f / fSin;
+		double fCoeff0 = sin((1.0f - fT) * fAngle) * fInvSin;
+		double fCoeff1 = sin(fT * fAngle) * fInvSin;
 		
 		out_q->x = fCoeff0 * rkP->x + fCoeff1 * rkT.x;
 		out_q->y = fCoeff0 * rkP->y + fCoeff1 * rkT.y;
@@ -224,7 +224,7 @@ void oquatf_slerp (float fT, const quatf* rkP, const quatf* rkQ, bool shortestPa
 	}
 }
 
-void oquatf_get_mat4x4(const quatf* me, const vec3f* point, float mat[4][4])
+void oquatf_get_mat4x4(const quatf* me, const vec3f* point, double mat[4][4])
 {
 	mat[0][0] = 1 - 2 * me->y * me->y - 2 * me->z * me->z;
 	mat[0][1] =     2 * me->x * me->y - 2 * me->w * me->z;
@@ -382,7 +382,7 @@ void oposef_apply_inverse(const posef *me, const posef *xform, posef *dest)
 /*
  * Generate the full 4x4 transformation matrix
  * equivalent to the pose */
-void oposef_get_mat4x4(const posef* me, float mat[4][4])
+void oposef_get_mat4x4(const posef* me, double mat[4][4])
 {
 	oquatf_get_mat4x4(&me->orient, &me->pos, mat);
 }
@@ -398,20 +398,20 @@ void omat4x4f_init_ident(mat4x4f* me)
 	me->m[3][3] = 1.0f;
 }
 
-void omat4x4f_init_perspective(mat4x4f* me, float fovy_rad, float aspect, float znear, float zfar)
+void omat4x4f_init_perspective(mat4x4f* me, double fovy_rad, double aspect, double znear, double zfar)
 {
-	float sine, cotangent, delta, half_fov;
+	double sine, cotangent, delta, half_fov;
 
 	half_fov = fovy_rad / 2.0f;
 	delta = zfar - znear;
-	sine = sinf(half_fov);
+	sine = sin(half_fov);
 
 	if ((delta == 0.0f) || (sine == 0.0f) || (aspect == 0.0f)) {
 		omat4x4f_init_ident(me);
 		return;
 	}
 
-	cotangent = cosf(half_fov) / sine;
+	cotangent = cos(half_fov) / sine;
 
 	me->m[0][0] = cotangent / aspect;
 	me->m[0][1] = 0;
@@ -434,13 +434,13 @@ void omat4x4f_init_perspective(mat4x4f* me, float fovy_rad, float aspect, float 
 	me->m[3][3] = 0;
 }
 
-void omat4x4f_init_frustum(mat4x4f* me, float left, float right, float bottom, float top, float znear, float zfar)
+void omat4x4f_init_frustum(mat4x4f* me, double left, double right, double bottom, double top, double znear, double zfar)
 {
 	omat4x4f_init_ident(me);
 
-	float delta_x = right - left;
-	float delta_y = top - bottom;
-	float delta_z = zfar - znear;
+	double delta_x = right - left;
+	double delta_y = top - bottom;
+	double delta_z = zfar - znear;
 	if ((delta_x == 0.0f) || (delta_y == 0.0f) || (delta_z == 0.0f)) {
 		/* can't divide by zero, so just give back identity */
 		return;
@@ -502,7 +502,7 @@ void omat4x4f_init_look_at(mat4x4f* me, const quatf* rot, const vec3f* eye)
 	me->m[3][3] = 1;
 }
 
-void omat4x4f_init_translate(mat4x4f* me, float x, float y, float z)
+void omat4x4f_init_translate(mat4x4f* me, double x, double y, double z)
 {
 	omat4x4f_init_ident(me);
 	me->m[0][3] = x;
@@ -536,7 +536,7 @@ void omat4x4f_transpose(const mat4x4f* m, mat4x4f* o)
 void omat4x4f_mult(const mat4x4f* l, const mat4x4f* r, mat4x4f *o)
 {
 	for(int i = 0; i < 4; i++){
-		float a0 = l->m[i][0], a1 = l->m[i][1], a2 = l->m[i][2], a3 = l->m[i][3];
+		double a0 = l->m[i][0], a1 = l->m[i][1], a2 = l->m[i][2], a3 = l->m[i][3];
 		o->m[i][0] = a0 * r->m[0][0] + a1 * r->m[1][0] + a2 * r->m[2][0] + a3 * r->m[3][0];
 		o->m[i][1] = a0 * r->m[0][1] + a1 * r->m[1][1] + a2 * r->m[2][1] + a3 * r->m[3][1];
 		o->m[i][2] = a0 * r->m[0][2] + a1 * r->m[1][2] + a2 * r->m[2][2] + a3 * r->m[3][2];
@@ -568,7 +568,7 @@ void ofq_get_mean(const filter_queue* me, vec3f* vec)
 		vec->z += me->elems[i].z;
 	}
 
-	vec->x /= (float)me->size;
-	vec->y /= (float)me->size;
-	vec->z /= (float)me->size;
+	vec->x /= (double)me->size;
+	vec->y /= (double)me->size;
+	vec->z /= (double)me->size;
 }
