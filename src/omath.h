@@ -53,6 +53,7 @@ typedef union {
 } quatf;
 
 void oquatf_init_axis(quatf* me, const vec3f* vec, float angle);
+void oquatf_set(quatf* me, float x, float y, float z, float w);
 
 void oquatf_get_rotated(const quatf* me, const vec3f* vec, vec3f* out_vec);
 void oquatf_mult_me(quatf* me, const quatf* q);
@@ -66,6 +67,7 @@ void oquatf_inverse(quatf* me);
 void oquatf_get_mat4x4(const quatf* me, const vec3f* point, float mat[4][4]);
 void oquatf_get_euler_angles(const quatf* me, vec3f* angles);
 void oquatf_from_euler_angles(quatf* me, const vec3f* angles);
+void oquatf_decompose_swing_twist(const quatf *me, const vec3f *twist_axis, quatf *swing, quatf *twist);
 
 // Pose = position + orientation
 typedef struct {

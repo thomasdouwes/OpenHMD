@@ -34,6 +34,7 @@ int main()
 	Test(test_oquatf_inverse);
 	Test(test_oquatf_diff);
 	Test(test_oquatf_euler);
+	Test(test_oquatf_decompose_swing_twist);
 	printf("\n");
 
 	printf("pose tests\n");
