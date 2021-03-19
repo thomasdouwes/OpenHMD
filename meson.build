@@ -100,7 +100,6 @@ if _drivers.contains('rift')
 		'src/drv_oculus_rift/rift.c',
 		'src/drv_oculus_rift/rift-hmd-radio.c',
 		'src/drv_oculus_rift/packet.c',
-		'src/drv_oculus_rift/rift-debug-draw.c',
 		'src/drv_oculus_rift/rift-sensor.c',
 		'src/drv_oculus_rift/rift-sensor-opencv.cpp',
 		'src/drv_oculus_rift/rift-sensor-maths.c',
@@ -123,6 +122,9 @@ if _drivers.contains('rift')
 	deps += dep_hidapi
 	deps += dep_libusb
 	deps += dep_opencv
+  if have_pipewire
+		sources += ['src/drv_oculus_rift/rift-debug-draw.c']
+  endif
 endif
 
 _drivers = get_option('drivers')
