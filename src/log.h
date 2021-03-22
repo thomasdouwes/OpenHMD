@@ -19,6 +19,7 @@ void* ohmd_allocfn(ohmd_context* ctx, const char* e_msg, size_t size);
 #endif
 
 #define LOG(_level, _levelstr, ...) do{ if(_level >= LOGLEVEL){ printf("[%s] ", (_levelstr)); printf(__VA_ARGS__); puts(""); } } while(0)
+#define LOG_HEXDUMP(_level, label, buf, len) do { if (_level >= LOGLEVEL) ohmd_hexdump_buffer(label, buf, len); } while(0)
 
 #if LOGLEVEL == 0
 #define LOGD(...) LOG(0, "DD", __VA_ARGS__)
@@ -36,5 +37,7 @@ void* ohmd_allocfn(ohmd_context* ctx, const char* e_msg, size_t size);
 #endif
 
 #define ohmd_set_error(_ctx, ...) { snprintf((_ctx)->error_msg, OHMD_STR_SIZE, __VA_ARGS__); LOGE(__VA_ARGS__); }
+
+void ohmd_hexdump_buffer(const char *label, const unsigned char *buf, int length);
 
 #endif

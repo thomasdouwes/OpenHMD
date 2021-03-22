@@ -649,3 +649,37 @@ ohmd_status ohmd_require_version(int major, int minor, int patch)
 
 	return OHMD_S_OK;
 }
+
+void ohmd_hexdump_buffer (const char *label, const unsigned char *buf, int length) {
+        int indent = 0;
+        char ascii[17];
+
+        if (label)
+                indent = strlen (label) + 2;
+        printf("%s: ", label);
+
+        ascii[16] = '\0';
+        for(int i = 0; i < length; i++){
+                printf("%02x ", buf[i]);
+
+                if (buf[i] >= ' ' && buf[i] <= '~')
+                        ascii[i % 16] = buf[i];
+                else
+                        ascii[i % 16] = '.';
+
+                if((i % 16) == 15 || (i+1) == length) {
+                         if ((i % 16) < 15) {
+                                int remain = 15 - (i%16);
+                                 ascii[(i+1) % 16] = '\0';
+                                 /* Pad the hex dump out to 48 chars */
+                                 printf("%*s", 3*remain, " ");
+                         }
+                         printf("| %s", ascii);
+
+                         if ((i+1) != length)
+                                 printf("\n%*s", indent, " ");
+                }
+        }
+        printf("\n");
+}
+
