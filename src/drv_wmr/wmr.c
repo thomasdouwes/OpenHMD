@@ -224,35 +224,64 @@ int read_config_part(wmr_priv *priv, unsigned char type,
 	unsigned char buf[33];
 	int offset = 0;
 	int size;
+	int retries = 0;
 
-	size = config_command_sync(priv->hmd_imu, 0x0b, buf, sizeof(buf));
+	retries = 0;
+	do {
+		size = config_command_sync(priv->hmd_imu, 0x0b, buf, sizeof(buf));
+		if (size != 33 || buf[0] != 0x02) {
+			if (retries++ < 5) {
+				ohmd_sleep(0.01);
+				continue;
+			}
 
-	if (size != 33 || buf[0] != 0x02) {
-		LOGE("Failed to issue command 0b: %02x %02x %02x\n",
-		       buf[0], buf[1], buf[2]);
-		return -1;
-	}
-	size = config_command_sync(priv->hmd_imu, type, buf, sizeof(buf));
-	if (size != 33 || buf[0] != 0x02) {
-		LOGE("Failed to issue command %02x: %02x %02x %02x\n", type,
-		       buf[0], buf[1], buf[2]);
-		return -1;
-	}
+			LOGE("Failed to issue command 0b: %02x %02x %02x\n",
+			    buf[0], buf[1], buf[2]);
+			return -1;
+		}
+		else {
+			break;
+		}
+	} while (true);
+
+	retries = 0;
+	do {
+		size = config_command_sync(priv->hmd_imu, type, buf, sizeof(buf));
+		if (size != 33 || buf[0] != 0x02) {
+			if (retries++ < 5) {
+				ohmd_sleep(0.01);
+				continue;
+			}
+			LOGE("Failed to issue command %02x: %02x %02x %02x\n", type,
+			    buf[0], buf[1], buf[2]);
+			return -1;
+		}
+		else {
+			break;
+		}
+	} while (true);
+
+	retries = 0;
 	for (;;) {
 		size = config_command_sync(priv->hmd_imu, 0x08, buf, sizeof(buf));
 		if (size != 33 || (buf[1] != 0x01 && buf[1] != 0x02)) {
-			LOGE("Failed to issue command 08: %02x %02x %02x\n",
-			       buf[0], buf[1], buf[2]);
+			if (retries++ < 10) {
+				ohmd_sleep(0.01);
+				continue;
+			}
+			LOGE("Failed to issue command 08: %02x %02x %02x, size %d\n",
+			    buf[0], buf[1], buf[2], size);
 			return -1;
 		}
 		if (buf[1] != 0x01)
 			break;
 		if (buf[2] > len || offset + buf[2] > len) {
-			LOGE("Getting more information then requested\n");
+			LOGE("Getting more information than requested\n");
 			return -1;
 		}
 		memcpy(data + offset, buf + 3, buf[2]);
 		offset += buf[2];
+		retries = 0;
 	}
 
 	return offset;
