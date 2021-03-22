@@ -15,8 +15,9 @@
 #define HOLOLENS_SENSORS_PID 0x0659
 
 
-#define REVERB_VID           0x03f0
-#define REVERB_PID           0x0c6a
+#define HP_VID           0x03f0
+#define REVERB_PID       0x0c6a
+#define REVERB_G2_PID    0x0580
  
 #include <string.h>
 #include <wchar.h>
@@ -359,14 +360,31 @@ void resetList(const nx_json* (*list)[32])
 
 void init_reverb() {
     LOGI("Initializing Reverb.");
-    hid_device* hid = hid_open(REVERB_VID, REVERB_PID, NULL);
-    unsigned char cmd[64] = { 0x50, 0x01 };
+    hid_device* hid = hid_open(HP_VID, REVERB_PID, NULL);
+
+    if (hid == NULL)
+	hid = hid_open(HP_VID, REVERB_G2_PID, NULL);
+
+    // sleep before we start seems to improve reliability
+    ohmd_sleep(0.2);
+
+    unsigned char cmd[64] = { 0x50, 0x01, };
     for (int i = 0; i<4; i++) {
         hid_send_feature_report(hid, cmd, sizeof(cmd));
         unsigned char data[64] = { 0x50 };
         hid_get_feature_report(hid, data, sizeof(data));
+        ohmd_sleep(0.01); // Sleep 10ms
     }
-    unsigned char cmd_2[64] = { 0x04, 0x01 };
+    unsigned char data[64] = { 0x09 };
+    hid_get_feature_report(hid, data, sizeof(data));
+    data[0] = 0x08;
+    hid_get_feature_report(hid, data, sizeof(data));
+    data[0] = 0x06;
+    hid_get_feature_report(hid, data, sizeof(data));
+
+    unsigned char cmd_2[2] = { 0x04, 0x01 };
+    hid_send_feature_report(hid, cmd_2, sizeof(cmd_2));
+
     hid_send_feature_report(hid, cmd_2, sizeof(cmd_2));
     hid_close(hid);
 }
@@ -403,7 +421,9 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 			samsung = true;
 		}
 		if (strncmp(hdr->name,
-			    "HP Reverb VR Headset VR1000-2xxx", 64) == 0) {
+			    "HP Reverb VR Headset VR1000-2xxx", 64) == 0 ||
+		    strncmp(hdr->name,
+			"HP Reverb Virtual Reality Headset G2", 64) == 0) {
                         reverb = true;
 		}
 
