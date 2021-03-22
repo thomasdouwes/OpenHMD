@@ -366,7 +366,8 @@ void init_reverb() {
 	hid = hid_open(HP_VID, REVERB_G2_PID, NULL);
 
     // sleep before we start seems to improve reliability
-    ohmd_sleep(0.2);
+    // 300ms is what Windows seems to do, so cargo cult that.
+    ohmd_sleep(0.3);
 
     unsigned char cmd[64] = { 0x50, 0x01, };
     for (int i = 0; i<4; i++) {
@@ -385,7 +386,6 @@ void init_reverb() {
     unsigned char cmd_2[2] = { 0x04, 0x01 };
     hid_send_feature_report(hid, cmd_2, sizeof(cmd_2));
 
-    hid_send_feature_report(hid, cmd_2, sizeof(cmd_2));
     hid_close(hid);
 }
 
