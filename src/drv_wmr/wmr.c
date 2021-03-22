@@ -413,6 +413,11 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 	int resolution_h, resolution_v; 
 
 	config = read_config(priv);
+	// Try twice to read the config. It fails the first time on HP G2
+	// after a fresh plug-in
+	if (config == NULL)
+		config = read_config(priv);
+
 	if (config) {
 		wmr_config_header* hdr = (wmr_config_header*)config;
 		LOGI("Model name: %.64s\n", hdr->name);
