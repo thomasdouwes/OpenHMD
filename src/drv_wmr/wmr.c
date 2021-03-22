@@ -32,17 +32,24 @@
 
 #include "../ext_deps/nxjson.h"
 
-typedef struct {
+typedef struct wmr_priv wmr_priv;
+
+struct wmr_priv {
 	ohmd_device base;
 
 	hid_device* hmd_imu;
+
+	hid_device* hmd_aux;
+
+	void (* deinit_func)(wmr_priv *priv);
+
 	fusion sensor_fusion;
 	vec3f raw_accel, raw_gyro;
 	uint32_t last_ticks;
 	uint8_t last_seq;
 	hololens_sensors_packet sensor;
 
-} wmr_priv;
+};
 
 static void vec3f_from_hololens_gyro(int16_t smp[3][32], int i, vec3f* out_vec)
 {
@@ -166,6 +173,13 @@ static void close_device(ohmd_device* device)
 	LOGD("closing Microsoft HoloLens Sensors device");
 
 	hid_close(priv->hmd_imu);
+
+	if (priv->hmd_aux) {
+		if (priv->deinit_func) {
+			priv->deinit_func(priv);
+		}
+		hid_close(priv->hmd_aux);
+	}
 
 	free(device);
 }
@@ -358,12 +372,28 @@ void resetList(const nx_json* (*list)[32])
 	memset(list, 0, sizeof(*list));
 }
 
-void init_reverb() {
+static void deinit_reverb(wmr_priv *priv) {
+    hid_device *hid = priv->hmd_aux;
+
+    /* Turn the screen off */
+    unsigned char cmd_2[2] = { 0x04, 0x00 };
+    hid_send_feature_report(hid, cmd_2, sizeof(cmd_2));
+}
+
+static bool init_reverb(wmr_priv *priv) {
     LOGI("Initializing Reverb.");
     hid_device* hid = hid_open(HP_VID, REVERB_PID, NULL);
 
     if (hid == NULL)
 	hid = hid_open(HP_VID, REVERB_G2_PID, NULL);
+
+    if (hid == NULL) {
+	LOGE("Failed to open the Reverb G2 control device. Check USB permissions");
+	return false;
+    }
+
+    priv->hmd_aux = hid;
+    priv->deinit_func = deinit_reverb;
 
     // sleep before we start seems to improve reliability
     // 300ms is what Windows seems to do, so cargo cult that.
@@ -386,7 +416,7 @@ void init_reverb() {
     unsigned char cmd_2[2] = { 0x04, 0x01 };
     hid_send_feature_report(hid, cmd_2, sizeof(cmd_2));
 
-    hid_close(hid);
+    return true;
 }
 
 static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
@@ -493,7 +523,10 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 
         if (reverb) {
             LOGI("Detected HP Reverb");
-            init_reverb();
+            if (!init_reverb(priv)) {
+		ohmd_set_error(driver->ctx, "Failed to initialise HP Reverb headset");
+		goto cleanup;
+	    }
         }
 
 	// Set device properties
