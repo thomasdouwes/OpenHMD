@@ -121,7 +121,8 @@ static void update_device(ohmd_device* device)
 		// currently the only message type the hardware supports (I think)
 		if(buffer[0] == HOLOLENS_IRQ_SENSORS){
 			handle_tracker_sensor_msg(priv, buffer, size);
-		}else if(buffer[0] != HOLOLENS_IRQ_DEBUG){
+		}else if(buffer[0] != HOLOLENS_IRQ_DEBUG &&
+			 buffer[0] != HOLOLENS_IRQ_UNKNOWN_23){
 			LOGE("unknown message type: %u", buffer[0]);
 		}
 	}
@@ -209,7 +210,9 @@ static int config_command_sync(hid_device* hmd_imu, unsigned char type,
 			return -1;
 		if (buf[0] == HOLOLENS_IRQ_CONTROL)
 			return size;
-	} while (buf[0] == HOLOLENS_IRQ_SENSORS || buf[0] == HOLOLENS_IRQ_DEBUG);
+	} while (buf[0] == HOLOLENS_IRQ_SENSORS ||
+		 buf[0] == HOLOLENS_IRQ_DEBUG ||
+		 buf[0] == HOLOLENS_IRQ_UNKNOWN_23);
 
 	return -1;
 }

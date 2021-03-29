@@ -20,6 +20,7 @@ typedef enum
 	HOLOLENS_IRQ_SENSORS = 1,
 	HOLOLENS_IRQ_CONTROL = 2,
 	HOLOLENS_IRQ_DEBUG = 3,
+	HOLOLENS_IRQ_UNKNOWN_23 = 23,
 } hololens_sensors_irq_cmd;
 
 typedef struct
