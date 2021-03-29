@@ -534,8 +534,8 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
         if (reverb) {
             LOGI("Detected HP Reverb");
             if (!init_reverb(priv)) {
-	         ohmd_set_error(driver->ctx, "Failed to initialise HP Reverb headset");
-	         goto cleanup;
+	        ohmd_set_error(driver->ctx, "Failed to initialise HP Reverb headset");
+	        goto cleanup;
             }
 	}
         if (reverb_g2) {
