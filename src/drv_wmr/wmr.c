@@ -448,16 +448,8 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 	//Bunch of temp variables to set to the display configs
 	int resolution_h, resolution_v; 
 
-	// Rather than checking a set number of times.
-	// Sometimes it needs more than 2 tries,
-	// Keep checking until we get a valid config.
-	// Now with a counter so it only tries 10 times and then gives up.	
-
-	int config_tries = 0;
-	config = NULL;
-	while (config == NULL && config_tries < 10)
-	    config = read_config(priv);
-	    config_tries += 1;
+	// Just read the config (ignoring error 23 fixed this)
+        config = read_config(priv);
 
 	if (config) {
 		wmr_config_header* hdr = (wmr_config_header*)config;
