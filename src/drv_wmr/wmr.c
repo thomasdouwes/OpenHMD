@@ -384,15 +384,17 @@ static void deinit_reverb(wmr_priv *priv) {
 }
 
 static bool init_reverb(wmr_priv *priv) {
-    LOGI("Initializing Reverb.");
+    LOGI("Starting Reverb/Reverb G2 initialization sequence.");
     hid_device* hid = hid_open(HP_VID, REVERB_PID, NULL);
-
-    if (hid == NULL)
-	hid = hid_open(HP_VID, REVERB_G2_PID, NULL);
-
     if (hid == NULL) {
-	LOGE("Failed to open the Reverb G2 control device. Check USB permissions");
-	return false;
+	hid = hid_open(HP_VID, REVERB_G2_PID, NULL);
+	if (hid == NULL) {
+	    LOGE("Failed to open the Reverb G2 control device. Check USB permissions");
+	    return false;
+        }
+        LOGI("Initialized Reverb G2.");
+    } else {
+        LOGI("Initialized Reverb.");
     }
 
     priv->hmd_aux = hid;
@@ -428,6 +430,7 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 	unsigned char *config;
 	bool samsung = false;
 	bool reverb = false;
+	bool reverb_g2 = false;
 
 	if(!priv)
 		return NULL;
@@ -445,11 +448,8 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 	//Bunch of temp variables to set to the display configs
 	int resolution_h, resolution_v; 
 
-	config = read_config(priv);
-	// Try twice to read the config. It fails the first time on HP G2
-	// after a fresh plug-in
-	if (config == NULL)
-		config = read_config(priv);
+	// Just read the config (ignoring error 23 fixed this)
+        config = read_config(priv);
 
 	if (config) {
 		wmr_config_header* hdr = (wmr_config_header*)config;
@@ -459,10 +459,12 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 			samsung = true;
 		}
 		if (strncmp(hdr->name,
-			    "HP Reverb VR Headset VR1000-2xxx", 64) == 0 ||
-		    strncmp(hdr->name,
-			"HP Reverb Virtual Reality Headset G2", 64) == 0) {
-                        reverb = true;
+			    "HP Reverb VR Headset VR1000-2xxx", 64) == 0) {
+			reverb = true;
+                }
+		if (strncmp(hdr->name,
+			    "HP Reverb Virtual Reality Headset G2", 64) == 0) {
+                       reverb_g2 = true;
 		}
 
 
@@ -527,10 +529,17 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
         if (reverb) {
             LOGI("Detected HP Reverb");
             if (!init_reverb(priv)) {
-		ohmd_set_error(driver->ctx, "Failed to initialise HP Reverb headset");
-		goto cleanup;
-	    }
-        }
+	        ohmd_set_error(driver->ctx, "Failed to initialise HP Reverb headset");
+	        goto cleanup;
+            }
+	}
+        if (reverb_g2) {
+            LOGI("Detected HP Reverb G2");
+            if (!init_reverb(priv)) {
+                ohmd_set_error(driver->ctx, "Failed to initialise HP Reverb G2 headset");
+                goto cleanup;
+            }
+	}
 
 	// Set device properties
 	if (samsung) {
@@ -543,6 +552,17 @@ static ohmd_device* open_device(ohmd_driver* driver, ohmd_device_desc* desc)
 		priv->base.properties.lens_vpos = 0.03304f; /* FIXME */
 		priv->base.properties.fov = DEG_TO_RAD(110.0f);
 		priv->base.properties.ratio = 0.9f;
+	}
+	if (reverb_g2) {
+		// Settings for Reverb G2 based on Windows Mixed Reality settings.
+		priv->base.properties.hsize = 0.103812f;
+		priv->base.properties.vsize = 0.051905f;
+		priv->base.properties.hres = resolution_h;
+		priv->base.properties.vres = resolution_v;
+		priv->base.properties.lens_sep = 0.063f; /* FIXME */
+		priv->base.properties.lens_vpos = 0.025953f; /* FIXME */ 
+		priv->base.properties.fov = DEG_TO_RAD(114.0f); /* Got this value from HP's website */
+		priv->base.properties.ratio = 1.0f;
 	} else {
 		// Most Windows Mixed Reality Headsets have two 2.89" 1440x1440 LCDs
 		priv->base.properties.hsize = 0.103812f;
