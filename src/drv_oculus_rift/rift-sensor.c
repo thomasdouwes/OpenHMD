@@ -100,6 +100,8 @@ struct rift_sensor_ctx_s
 	ohmd_pw_video_stream *debug_vid_raw;
 	ohmd_pw_video_stream *debug_vid;
 	uint8_t *debug_frame;
+
+	ohmd_gst_video_stream *debug_vid_raw_gst;
 };
 
 #define INIT_QUEUE(q) \
@@ -299,6 +301,9 @@ static void analyse_frame_fast(rift_sensor_ctx *sensor, rift_sensor_analysis_fra
 	if (ohmd_pw_video_stream_connected(sensor->debug_vid_raw))
 		ohmd_pw_video_stream_push (sensor->debug_vid_raw, vframe->start_ts, vframe->data);
 
+	if (sensor->debug_vid_raw_gst)
+		ohmd_gst_video_stream_push (sensor->debug_vid_raw_gst, frame->vframe->start_ts, frame->vframe->data);
+
 	if (ohmd_pw_video_stream_connected(sensor->debug_vid)) {
 		rift_debug_draw_frame (sensor->debug_frame, frame->bwobs, sensor->pf.cs, frame,
 			frame->n_devices, sensor->devices, &sensor->dev->calib, &sensor->pf.camera_pose);
@@ -314,7 +319,7 @@ static bool handle_found_pose (rift_sensor_ctx *sensor_ctx,
 
 rift_sensor_ctx *
 rift_sensor_new(ohmd_context* ohmd_ctx, int id, const char *serial_no,
-	rift_sensor_device *dev, rift_tracker_ctx *tracker)
+	rift_sensor_device *dev, rift_tracker_ctx *tracker, ohmd_gst_pipeline *debug_pipe)
 {
 	rift_sensor_ctx *sensor_ctx = NULL;
 	char stream_id[64];
@@ -364,6 +369,12 @@ rift_sensor_new(ohmd_context* ohmd_ctx, int id, const char *serial_no,
 	/* Raw debug video stream */
 	sensor_ctx->debug_vid_raw = ohmd_pw_video_stream_new (stream_id, "Rift Sensor", OHMD_PW_VIDEO_FORMAT_GRAY8,
 			calib->width, calib->height, 625, 12);
+
+	/* Raw debug video stream - GStreamer recording */
+	if (debug_pipe) {
+		sensor_ctx->debug_vid_raw_gst = ohmd_gst_video_stream_new (debug_pipe, OHMD_PW_VIDEO_FORMAT_GRAY8,
+			calib->width, calib->height, 625, 12);
+	}
 
 	/* Annotated debug video stream */
 	sensor_ctx->debug_vid = ohmd_pw_video_stream_new (stream_id, "Rift Tracking", OHMD_PW_VIDEO_FORMAT_RGB,
@@ -434,6 +445,8 @@ rift_sensor_free (rift_sensor_ctx *sensor_ctx)
 		ohmd_pw_video_stream_free (sensor_ctx->debug_vid);
 	if (sensor_ctx->debug_frame != NULL)
 		free (sensor_ctx->debug_frame);
+	if (sensor_ctx->debug_vid_raw_gst != NULL)
+		ohmd_gst_video_stream_free (sensor_ctx->debug_vid_raw_gst);
 
 	if (sensor_ctx->dev)
 		rift_sensor_device_free(sensor_ctx->dev);

@@ -8,6 +8,7 @@
 #include <libusb.h>
 
 #include "ohmd-video.h"
+#include "ohmd-gstreamer.h"
 
 #include "rift.h"
 #include "rift-sensor-device.h"
@@ -72,7 +73,7 @@ struct rift_sensor_analysis_frame {
 };
 
 rift_sensor_ctx * rift_sensor_new(ohmd_context* ohmd_ctx, int id, const char *serial_no,
-	rift_sensor_device *dev, rift_tracker_ctx *tracker);
+	rift_sensor_device *dev, rift_tracker_ctx *tracker, ohmd_gst_pipeline *debug_pipe);
 void rift_sensor_free (rift_sensor_ctx *sensor_ctx);
 const char *rift_sensor_serial_no (rift_sensor_ctx *sensor);
 bool rift_sensor_add_device (rift_sensor_ctx *ctx, rift_tracked_device *device);
