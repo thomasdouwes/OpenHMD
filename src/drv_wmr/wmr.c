@@ -85,15 +85,7 @@ struct wmr_priv {
 
 static void vec3f_from_hololens_gyro(int16_t smp[3][32], int i, vec3f* out_vec)
 {
-	out_vec->x = (float)(smp[1][8*i+0] +
-			     smp[1][8*i+1] +
-			     smp[1][8*i+2] +
-			     smp[1][8*i+3] +
-			     smp[1][8*i+4] +
-			     smp[1][8*i+5] +
-			     smp[1][8*i+6] +
-			     smp[1][8*i+7]) * 0.001f * -0.125f;
-	out_vec->y = (float)(smp[0][8*i+0] +
+	out_vec->x = (float)(smp[0][8*i+0] +
 			     smp[0][8*i+1] +
 			     smp[0][8*i+2] +
 			     smp[0][8*i+3] +
@@ -101,6 +93,14 @@ static void vec3f_from_hololens_gyro(int16_t smp[3][32], int i, vec3f* out_vec)
 			     smp[0][8*i+5] +
 			     smp[0][8*i+6] +
 			     smp[0][8*i+7]) * 0.001f * -0.125f;
+	out_vec->y = (float)(smp[1][8*i+0] +
+			     smp[1][8*i+1] +
+			     smp[1][8*i+2] +
+			     smp[1][8*i+3] +
+			     smp[1][8*i+4] +
+			     smp[1][8*i+5] +
+			     smp[1][8*i+6] +
+			     smp[1][8*i+7]) * 0.001f * -0.125f;
 	out_vec->z = (float)(smp[2][8*i+0] +
 			     smp[2][8*i+1] +
 			     smp[2][8*i+2] +
@@ -113,8 +113,8 @@ static void vec3f_from_hololens_gyro(int16_t smp[3][32], int i, vec3f* out_vec)
 
 static void vec3f_from_hololens_accel(int32_t smp[3][4], int i, vec3f* out_vec)
 {
-	out_vec->x = (float)smp[1][i] * 0.001f * -1.0f;
-	out_vec->y = (float)smp[0][i] * 0.001f * -1.0f;
+	out_vec->x = (float)smp[0][i] * 0.001f * -1.0f;
+	out_vec->y = (float)smp[1][i] * 0.001f * -1.0f;
 	out_vec->z = (float)smp[2][i] * 0.001f * -1.0f;
 }
 
