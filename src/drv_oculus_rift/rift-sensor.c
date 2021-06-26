@@ -376,6 +376,7 @@ rift_sensor_new(ohmd_context* ohmd_ctx, int id, const char *serial_no,
 			calib->width, calib->height, 625, 12);
 
 		char debug_str[1024];
+		uint64_t now = ohmd_monotonic_get(sensor_ctx->ohmd_ctx);
 
 		snprintf (debug_str, 1024, "{ \"type\": \"sensor-config\", \"device-id\": \"%s\", \"is-cv1\": %d, "
 			"\"camera-matrix\": [ %f, %f, %f, %f, %f, %f, %f, %f, %f ], \"dist-coeffs\": [ %f, %f, %f, %f, %f ], "
@@ -389,7 +390,7 @@ rift_sensor_new(ohmd_context* ohmd_ctx, int id, const char *serial_no,
 			calib->width, calib->height);
 		debug_str[1023] = '\0';
 
-		ohmd_gst_pipeline_push_metadata (debug_pipe, 0, debug_str);
+		ohmd_gst_pipeline_push_metadata (debug_pipe, now, debug_str);
 	}
 
 	/* Annotated debug video stream */
