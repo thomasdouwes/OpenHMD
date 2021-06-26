@@ -372,8 +372,24 @@ rift_sensor_new(ohmd_context* ohmd_ctx, int id, const char *serial_no,
 
 	/* Raw debug video stream - GStreamer recording */
 	if (debug_pipe) {
-		sensor_ctx->debug_vid_raw_gst = ohmd_gst_video_stream_new (debug_pipe, OHMD_PW_VIDEO_FORMAT_GRAY8,
+		sensor_ctx->debug_vid_raw_gst = ohmd_gst_video_stream_new (debug_pipe, stream_id, OHMD_PW_VIDEO_FORMAT_GRAY8,
 			calib->width, calib->height, 625, 12);
+
+		char debug_str[1024];
+
+		snprintf (debug_str, 1024, "{ \"type\": \"sensor-config\", \"device-id\": \"%s\", \"is-cv1\": %d, "
+			"\"camera-matrix\": [ %f, %f, %f, %f, %f, %f, %f, %f, %f ], \"dist-coeffs\": [ %f, %f, %f, %f, %f ], "
+			"\"width\": %u, \"height\": %u }",
+			stream_id, calib->is_cv1 ? 1 : 0,
+			calib->camera_matrix.m[0], calib->camera_matrix.m[1], calib->camera_matrix.m[2],
+			calib->camera_matrix.m[3], calib->camera_matrix.m[4], calib->camera_matrix.m[5],
+			calib->camera_matrix.m[6], calib->camera_matrix.m[7], calib->camera_matrix.m[8],
+			calib->dist_coeffs[0], calib->dist_coeffs[1], calib->dist_coeffs[2], calib->dist_coeffs[3],
+			calib->dist_coeffs[4],
+			calib->width, calib->height);
+		debug_str[1023] = '\0';
+
+		ohmd_gst_pipeline_push_metadata (debug_pipe, 0, debug_str);
 	}
 
 	/* Annotated debug video stream */
