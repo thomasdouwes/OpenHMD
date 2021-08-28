@@ -92,6 +92,8 @@ if have_pipewire
 	sources += [ 'src/drv_oculus_rift/ohmd-pipewire.c' ]
 endif
 
+publish_c_args = []
+
 if get_option('default_library') == 'shared'
 	if host_machine.system() == 'windows'
 		c_args += '-DDLL_EXPORT'
@@ -101,6 +103,7 @@ if get_option('default_library') == 'shared'
 else
 	if host_machine.system() == 'windows'
 		c_args += '-DOHMD_STATIC'
+		publish_c_args += '-DOHMD_STATIC'
 	endif
 endif
 
@@ -258,6 +261,7 @@ if _examples.contains('simple')
 	executable(
 		'openhmd_simple_example',
 		simple_sources,
+		c_args: publish_c_args,
 		include_directories: include_directories('./include'),
 		link_with: [openhmd_lib],
 		dependencies: deps,
@@ -281,6 +285,7 @@ if _examples.contains('opengl')
 	executable(
 		'openhmd_opengl_example',
 		opengl_sources,
+		c_args: publish_c_args,
 		include_directories: include_directories([
 			'./include',
 			'examples/opengl'
@@ -306,6 +311,7 @@ pkg.generate(
 	subdirs: 'openhmd',
 	requires: hidapi,
 	libraries: openhmd_lib,
+	extra_cflags: publish_c_args,
 	url: 'http://www.openhmd.net/',
 )
 install_headers('include/openhmd.h', subdir: 'openhmd')
@@ -313,6 +319,7 @@ install_headers('include/openhmd.h', subdir: 'openhmd')
 # Declare openhmd as a dependency so it can be used
 # as a meson subproject
 openhmd_dep = declare_dependency(
+  compile_args: publish_c_args,
   include_directories: include_directories('./include'),
   link_with : openhmd_lib)
 
@@ -335,6 +342,7 @@ if get_option('tests')
 	unittests = executable(
 		'openhmd_unittests',
 		unittests_sources,
+		c_args: publish_c_args,
 		include_directories: include_directories('./include', './src'),
 		link_with: [openhmd_lib],
 		dependencies: [dep_libm, dep_threads]
