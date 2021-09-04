@@ -101,6 +101,7 @@ struct rift_sensor_ctx_s
 	ohmd_pw_video_stream *debug_vid;
 	uint8_t *debug_frame;
 
+	ohmd_gst_pipeline *debug_pipe;
 	ohmd_gst_video_stream *debug_vid_raw_gst;
 };
 
@@ -372,16 +373,18 @@ rift_sensor_new(ohmd_context* ohmd_ctx, int id, const char *serial_no,
 
 	/* Raw debug video stream - GStreamer recording */
 	if (debug_pipe) {
+		sensor_ctx->debug_pipe = debug_pipe;
 		sensor_ctx->debug_vid_raw_gst = ohmd_gst_video_stream_new (debug_pipe, stream_id, OHMD_PW_VIDEO_FORMAT_GRAY8,
 			calib->width, calib->height, 625, 12);
 
 		char debug_str[1024];
 		uint64_t now = ohmd_monotonic_get(sensor_ctx->ohmd_ctx);
 
-		snprintf (debug_str, 1024, "{ \"type\": \"sensor-config\", \"device-id\": \"%s\", \"is-cv1\": %d, "
+		snprintf (debug_str, 1024, "{ \"type\": \"sensor-config\", "
+			"\"device-id\": \"%s\", \"video-stream-id\": \"%s\", \"is-cv1\": %d, "
 			"\"camera-matrix\": [ %f, %f, %f, %f, %f, %f, %f, %f, %f ], \"dist-coeffs\": [ %f, %f, %f, %f, %f ], "
 			"\"width\": %u, \"height\": %u }",
-			stream_id, calib->is_cv1 ? 1 : 0,
+			sensor_ctx->serial_no, stream_id, calib->is_cv1 ? 1 : 0,
 			calib->camera_matrix.m[0], calib->camera_matrix.m[1], calib->camera_matrix.m[2],
 			calib->camera_matrix.m[3], calib->camera_matrix.m[4], calib->camera_matrix.m[5],
 			calib->camera_matrix.m[6], calib->camera_matrix.m[7], calib->camera_matrix.m[8],
@@ -696,4 +699,22 @@ void rift_sensor_set_pose(rift_sensor_ctx *sensor, posef *camera_pose)
 	    sensor->id,
 	    camera_pose->orient.x, camera_pose->orient.y, camera_pose->orient.z, camera_pose->orient.w,
 	    camera_pose->pos.x, camera_pose->pos.y, camera_pose->pos.z);
+
+	if (sensor->debug_pipe) {
+		char debug_str[1024];
+		uint64_t now = ohmd_monotonic_get(sensor->ohmd_ctx);
+
+		snprintf (debug_str, 1024, "{ \"type\": \"sensor-pose\", "
+			"\"device-id\": \"%s\", "
+			"\"pos\" : [ %f, %f, %f ], \"orient\" : [ %f, %f, %f, %f ] "
+			"}",
+			sensor->serial_no,
+			camera_pose->orient.x, camera_pose->orient.y, camera_pose->orient.z, camera_pose->orient.w,
+			camera_pose->pos.x, camera_pose->pos.y, camera_pose->pos.z);
+		debug_str[1023] = '\0';
+
+		ohmd_gst_pipeline_push_metadata (sensor->debug_pipe, now, debug_str);
+	}
+
+	ohmd_unlock_mutex (sensor->sensor_lock);
 }
