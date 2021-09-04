@@ -14,6 +14,7 @@
 #include <assert.h>
 #include <inttypes.h>
 
+#include "rift-tracker.h"
 #include "rift-sensor.h"
 #include "rift-sensor-device.h"
 #include "rift-sensor-pose-search.h"
@@ -382,6 +383,7 @@ update_device_and_blobs (rift_pose_finder *pf, rift_sensor_analysis_frame *frame
 			oquatf_get_rotated(&cam_orient, &gravity_vector, &pf->cam_gravity_vector);
 
 			pf->have_camera_pose = true;
+			pf->camera_pose_changed = true;
 		}
 		else if (dev->id == 0) {
 			LOGD("Sensor %d No camera pose yet - gravity error is %f degrees rot_error (%f, %f, %f)",
