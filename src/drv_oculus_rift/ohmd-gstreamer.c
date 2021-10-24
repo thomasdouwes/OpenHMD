@@ -64,15 +64,16 @@ bus_handler (GstBus * bus, GstMessage * message, gpointer data)
 		case GST_MESSAGE_ERROR:
 		{
 			GError *err = NULL;
-			gchar *name;
+			gchar *name, *dbg;
 
 			name = gst_object_get_path_string (message->src);
-			gst_message_parse_error (message, &err, NULL);
+			gst_message_parse_error (message, &err, &dbg);
 
-			LOGE("Error from GStreamer pipeline. Element %s: %s", name, err->message);
+			LOGE("Error from GStreamer pipeline. Element %s: %s. Debug %s", name, err->message, dbg ? dbg : "NULL");
 
 			g_clear_error (&err);
 			g_free (name);
+			g_free (dbg);
 
 			/* Make sure the waiter gets woken */
 			g_mutex_lock(&p->lock);
@@ -119,20 +120,24 @@ static void ohmd_gst_pipeline_add_source(ohmd_gst_pipeline *pipe, GstPad *sinkpa
 	GstSegment segment;
 
 	event = gst_event_new_stream_start(stream_id);
-	gst_pad_send_event (sinkpad, event);
+	if (!gst_pad_send_event (sinkpad, event))
+		LOGE("Failed to send stream start to stream %s\n", stream_id);
 
 	event = gst_event_new_caps(caps);
-	gst_pad_send_event (sinkpad, event);
+	if (!gst_pad_send_event (sinkpad, event))
+		LOGE("Failed to send caps to stream %s\n", stream_id);
 	gst_caps_unref(caps);
 
 	gst_segment_init(&segment, GST_FORMAT_TIME);
 	event = gst_event_new_segment(&segment);
-	gst_pad_send_event (sinkpad, event);
+	if (!gst_pad_send_event (sinkpad, event))
+		LOGE("Failed to send segment to stream %s\n", stream_id);
 
 	tags = gst_tag_list_new (GST_TAG_TITLE, stream_id, NULL);
 	gst_tag_list_set_scope(tags, GST_TAG_SCOPE_STREAM);
 	event = gst_event_new_tag(tags);
-	gst_pad_send_event (sinkpad, event);
+	if (!gst_pad_send_event (sinkpad, event))
+		LOGE("Failed to send tags to stream %s\n", stream_id);
 
 	g_mutex_lock(&pipe->lock);
 	pipe->sinkpads = g_list_prepend(pipe->sinkpads, sinkpad);
