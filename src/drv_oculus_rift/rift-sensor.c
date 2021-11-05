@@ -103,6 +103,8 @@ struct rift_sensor_ctx_s
 
 	ohmd_gst_pipeline *debug_pipe;
 	ohmd_gst_video_stream *debug_vid_raw_gst;
+	/* Blob + pose debug file */
+	FILE *debug_file;
 };
 
 #define INIT_QUEUE(q) \
@@ -166,6 +168,75 @@ rift_sensor_add_device(rift_sensor_ctx *sensor, rift_tracked_device *device)
 	return ret;
 }
 
+static void dump_pose_and_blobs (rift_sensor_ctx *sensor, uint64_t now, rift_sensor_analysis_frame *frame)
+{
+	if (sensor->debug_file == NULL)
+		return;
+
+	if (!frame->exposure_info_valid || frame->vframe == NULL)
+		return;
+
+	fprintf(sensor->debug_file, "{ \"type\": \"frame-release\", \"local-ts\": %lu, "
+		"\"frame-local-ts\": %lu, \"frame-hmd-ts\": %u, "
+		"\"frame-arrival-start-local-ts\": %lu, "
+		"\"frame-arrival-finish-local-ts\": %lu, "
+		"\"fast-analysis-start-local-ts\": %lu, "
+		"\"blob-extraction-finish-local-ts\": %lu, "
+		"\"fast-analysis-finish-local-ts\": %lu, "
+		"\"long-analysis-start-local-ts\": %lu, "
+		"\"long-analysis-finish-local-ts\": %lu, ",
+		now, frame->exposure_info.local_ts, frame->exposure_info.hmd_ts,
+		frame->vframe->start_ts, frame->frame_delivered_ts,
+		frame->image_analysis_start_ts, frame->blob_extract_finish_ts, frame->image_analysis_finish_ts,
+		frame->long_analysis_start_ts, frame->long_analysis_finish_ts);
+
+	int i;
+	bool first_entry = true;
+
+	fprintf(sensor->debug_file, "\"poses\": [");
+
+	for (i = 0; i < frame->exposure_info.n_devices; i++) {
+		rift_sensor_frame_device_state *dev_state = frame->capture_state + i;
+		posef *pose = &dev_state->final_cam_pose;
+
+		if (!dev_state->found_device_pose)
+			continue;
+
+		if (!first_entry)
+			fprintf(sensor->debug_file, ", ");
+		else
+			first_entry = false;
+
+		fprintf(sensor->debug_file, "{ \"device\": %d, \"pose\": { \"orient\": [ %f, %f, %f, %f ], \"pos\": [%f, %f, %f ] } }",
+			sensor->devices[i]->id,
+			pose->orient.x, pose->orient.y, pose->orient.z, pose->orient.w,
+			pose->pos.x, pose->pos.y, pose->pos.z);
+	}
+
+	fprintf(sensor->debug_file, "], \"blobs\": [");
+
+	if (frame->bwobs) {
+		first_entry = true;
+		for (i = 0; i < frame->bwobs->num_blobs; i++) {
+			struct blob *b = frame->bwobs->blobs + i;
+
+			if (!first_entry)
+				fprintf(sensor->debug_file, ", ");
+			else
+				first_entry = false;
+
+			fprintf(sensor->debug_file, "{ \"id\": %d, \"device\": %d, \"led\": %d, \"age\": %d, "
+				"\"x\": %f, \"y\": %f, \"top\": %d, \"left\": %d, "
+				"\"width\": %d, \"height\": %d, \"vx\": %f, \"vy\": %f "
+				"}", b->blob_id, LED_OBJECT_ID(b->led_id), LED_LOCAL_ID(b->led_id),
+				b->age, b->x, b->y, b->top, b->left, b->width, b->height,
+				b->vx, b->vy);
+		}
+	}
+
+	fprintf(sensor->debug_file, "] }\n");
+}
+
 /* Called with sensor_lock held. Releases a frame back to the capture thread */
 static void
 release_capture_frame(rift_sensor_ctx *sensor, rift_sensor_analysis_frame *frame)
@@ -182,6 +253,8 @@ release_capture_frame(rift_sensor_ctx *sensor, rift_sensor_analysis_frame *frame
 		 (uint32_t) (frame->blob_extract_finish_ts - frame->image_analysis_start_ts) / 1000000,
 		 (double) (frame->long_analysis_start_ts - frame->image_analysis_finish_ts) / 1000000.0,
 		 (uint32_t) (frame->long_analysis_finish_ts - frame->long_analysis_start_ts) / 1000000);
+
+	dump_pose_and_blobs(sensor, now, frame);
 
 	rift_tracker_frame_release (sensor->tracker, now,
 			frame->vframe->start_ts, frame->exposure_info_valid ? &frame->exposure_info : NULL,
@@ -405,6 +478,15 @@ rift_sensor_new(ohmd_context* ohmd_ctx, int id, const char *serial_no,
 		sensor_ctx->debug_frame = ohmd_alloc(ohmd_ctx, 2 * 3 * calib->width * calib->height);
 	}
 
+	const char *trace_file_dir = getenv("OHMD_TRACE_DIR");
+	if (trace_file_dir) {
+	        char trace_file[OHMD_STR_SIZE+1];
+	        snprintf(trace_file, OHMD_STR_SIZE, "%s/%s", trace_file_dir, stream_id);
+	        trace_file[OHMD_STR_SIZE] = '\0';
+	        LOGI("Opening blob trace file %s", trace_file);
+	        sensor_ctx->debug_file = fopen(trace_file, "w");
+	}
+
 	/* Start analysis threads */
 	sensor_ctx->shutdown = false;
 	sensor_ctx->fast_analysis_thread = ohmd_create_thread (ohmd_ctx, fast_analysis_thread, sensor_ctx);
@@ -467,6 +549,8 @@ rift_sensor_free (rift_sensor_ctx *sensor_ctx)
 		free (sensor_ctx->debug_frame);
 	if (sensor_ctx->debug_vid_raw_gst != NULL)
 		ohmd_gst_video_stream_free (sensor_ctx->debug_vid_raw_gst);
+	if (sensor_ctx->debug_file != NULL)
+		fclose (sensor_ctx->debug_file);
 
 	if (sensor_ctx->dev)
 		rift_sensor_device_free(sensor_ctx->dev);
