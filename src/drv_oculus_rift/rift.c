@@ -242,8 +242,6 @@ static void handle_tracker_sensor_msg(rift_hmd_t* priv, uint64_t local_ts, unsig
 	uint32_t device_ts = s->timestamp - total_dt;
 	bool sent_exposure_update = false;
 
-	local_ts -= TICK_US_TO_NS(total_dt);
-
 	for(int i = 0; i < s->num_samples; i++){
 		vec3f raw_gyro, gyro;
 		vec3f raw_accel, accel;
@@ -275,7 +273,6 @@ static void handle_tracker_sensor_msg(rift_hmd_t* priv, uint64_t local_ts, unsig
 		rift_tracked_device_imu_update(priv->tracked_dev, local_ts, device_ts, TICK_US_TO_SEC(dt), &gyro, &accel, &raw_mag);
 
 		device_ts += dt;
-		local_ts += TICK_US_TO_NS(dt);
 		dt = TICK_LEN; // TODO: query the Rift for the sample rate
 	}
 	priv->last_imu_timestamp = s->timestamp;
