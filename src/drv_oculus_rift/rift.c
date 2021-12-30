@@ -643,6 +643,7 @@ static void update_device(ohmd_device* device)
 static int getf_hmd(rift_hmd_t *hmd, ohmd_float_value type, float* out)
 {
 	posef pose = { 0, };
+	uint64_t ts = ohmd_monotonic_get(hmd->ctx);
 
 	switch(type){
 	case OHMD_DISTORTION_K: {
@@ -654,7 +655,7 @@ static int getf_hmd(rift_hmd_t *hmd, ohmd_float_value type, float* out)
 
 	case OHMD_ROTATION_QUAT: {
 			if (hmd->tracked_dev) {
-				rift_tracked_device_get_view_pose(hmd->tracked_dev, &pose, NULL, NULL, NULL);
+				rift_tracked_device_get_view_pose(hmd->tracked_dev, ts, &pose, NULL, NULL, NULL);
 			}
 			*(quatf*)out = pose.orient;
 			break;
@@ -662,7 +663,7 @@ static int getf_hmd(rift_hmd_t *hmd, ohmd_float_value type, float* out)
 
 	case OHMD_POSITION_VECTOR:
 		if (hmd->tracked_dev) {
-			rift_tracked_device_get_view_pose(hmd->tracked_dev, &pose, NULL, NULL, NULL);
+			rift_tracked_device_get_view_pose(hmd->tracked_dev, ts, &pose, NULL, NULL, NULL);
 		}
 		*(vec3f*)out = pose.pos;
 		break;
@@ -671,7 +672,7 @@ static int getf_hmd(rift_hmd_t *hmd, ohmd_float_value type, float* out)
 		vec3f vel = { 0, };
 
 		if (hmd->tracked_dev) {
-			rift_tracked_device_get_view_pose(hmd->tracked_dev, NULL, &vel, NULL, NULL);
+			rift_tracked_device_get_view_pose(hmd->tracked_dev, ts, NULL, &vel, NULL, NULL);
 		}
 		*(vec3f*)out = vel;
 		break;
@@ -680,7 +681,7 @@ static int getf_hmd(rift_hmd_t *hmd, ohmd_float_value type, float* out)
 		vec3f accel = { 0, };
 
 		if (hmd->tracked_dev) {
-			rift_tracked_device_get_view_pose(hmd->tracked_dev, NULL, NULL, &accel, NULL);
+			rift_tracked_device_get_view_pose(hmd->tracked_dev, ts, NULL, NULL, &accel, NULL);
 		}
 		*(vec3f*)out = accel;
 		break;
@@ -689,7 +690,7 @@ static int getf_hmd(rift_hmd_t *hmd, ohmd_float_value type, float* out)
 		vec3f ang_vel = { 0, };
 
 		if (hmd->tracked_dev) {
-			rift_tracked_device_get_view_pose(hmd->tracked_dev, NULL, NULL, NULL, &ang_vel);
+			rift_tracked_device_get_view_pose(hmd->tracked_dev, ts, NULL, NULL, NULL, &ang_vel);
 		}
 		*(vec3f*)out = ang_vel;
 		break;
@@ -718,19 +719,20 @@ static int getf_hmd(rift_hmd_t *hmd, ohmd_float_value type, float* out)
 static int getf_touch_controller(rift_device_priv* dev_priv, ohmd_float_value type, float* out)
 {
 	rift_touch_controller_t *touch = (rift_touch_controller_t *)(dev_priv);
+	uint64_t ts = ohmd_monotonic_get(dev_priv->hmd->ctx);
 	posef pose = { 0, };
 
 	switch(type){
 	case OHMD_ROTATION_QUAT: {
 			if (touch->tracked_dev) {
-				rift_tracked_device_get_view_pose(touch->tracked_dev, &pose, NULL, NULL, NULL);
+				rift_tracked_device_get_view_pose(touch->tracked_dev, ts, &pose, NULL, NULL, NULL);
 			}
 			*(quatf*)out = pose.orient;
 			break;
 		}
 	case OHMD_POSITION_VECTOR:
 		if (touch->tracked_dev) {
-			rift_tracked_device_get_view_pose(touch->tracked_dev, &pose, NULL, NULL, NULL);
+			rift_tracked_device_get_view_pose(touch->tracked_dev, ts, &pose, NULL, NULL, NULL);
 		}
 		*(vec3f*)out = pose.pos;
 		break;
@@ -738,7 +740,7 @@ static int getf_touch_controller(rift_device_priv* dev_priv, ohmd_float_value ty
 		vec3f vel = { 0, };
 
 		if (touch->tracked_dev) {
-			rift_tracked_device_get_view_pose(touch->tracked_dev, NULL, &vel, NULL, NULL);
+			rift_tracked_device_get_view_pose(touch->tracked_dev, ts, NULL, &vel, NULL, NULL);
 		}
 		*(vec3f*)out = vel;
 		break;
@@ -747,7 +749,7 @@ static int getf_touch_controller(rift_device_priv* dev_priv, ohmd_float_value ty
 		vec3f accel = { 0, };
 
 		if (touch->tracked_dev) {
-			rift_tracked_device_get_view_pose(touch->tracked_dev, NULL, NULL, &accel, NULL);
+			rift_tracked_device_get_view_pose(touch->tracked_dev, ts, NULL, NULL, &accel, NULL);
 		}
 		*(vec3f*)out = accel;
 		break;
@@ -756,7 +758,7 @@ static int getf_touch_controller(rift_device_priv* dev_priv, ohmd_float_value ty
 		vec3f ang_vel = { 0, };
 
 		if (touch->tracked_dev) {
-			rift_tracked_device_get_view_pose(touch->tracked_dev, NULL, NULL, NULL, &ang_vel);
+			rift_tracked_device_get_view_pose(touch->tracked_dev, ts, NULL, NULL, NULL, &ang_vel);
 		}
 		*(vec3f*)out = ang_vel;
 		break;
