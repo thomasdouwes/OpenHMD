@@ -122,6 +122,7 @@ struct rift_tracked_device_priv {
 
 	uint32_t last_device_ts;
 	uint64_t device_time_ns;
+	uint64_t last_imu_local_ts;
 
 	uint64_t last_observed_orient_ts;
 	uint64_t last_observed_pose_ts;
@@ -726,6 +727,7 @@ void rift_tracked_device_imu_update(rift_tracked_device *dev_base, uint64_t loca
 		dev->device_time_ns += dt_ns;
 	}
 	dev->last_device_ts = device_ts;
+	dev->last_imu_local_ts = local_ts;
 
 	rift_kalman_6dof_imu_update (&dev->ukf_fusion, dev->device_time_ns, ang_vel, accel, mag_field);
 
@@ -747,7 +749,7 @@ void rift_tracked_device_imu_update(rift_tracked_device *dev_base, uint64_t loca
 	ohmd_unlock_mutex (dev->device_lock);
 }
 
-void rift_tracked_device_get_view_pose(rift_tracked_device *dev_base, posef *pose, vec3f *vel, vec3f *accel, vec3f *ang_vel)
+void rift_tracked_device_get_view_pose(rift_tracked_device *dev_base, uint64_t local_ts, posef *pose, vec3f *vel, vec3f *accel, vec3f *ang_vel)
 {
 	rift_tracked_device_priv *dev = (rift_tracked_device_priv *) (dev_base);
 
@@ -791,6 +793,28 @@ void rift_tracked_device_get_view_pose(rift_tracked_device *dev_base, posef *pos
 
 		oquatf_get_rotated(&dev->device_from_fusion.orient, &imu_vel, &dev->reported_lin_vel);
 		ovec3f_add(&dev->reported_lin_vel, &dev->reported_lin_vel, &extra_lin_vel);
+
+		rift_tracked_device_send_debug_printf(dev, local_ts, "{ \"type\": \"output-pose\", \"local-ts\": %llu, "
+			"\"device-ts\": %u, \"last-imu-local-ts\": %llu, "
+			"\"pos\" : [ %f, %f, %f ], "
+			"\"orient\" : [ %f, %f, %f, %f ], "
+			"\"ang-vel\" : [ %f, %f, %f ], "
+			"\"lin-vel\" : [ %f, %f, %f ], "
+			"\"lin-accel\" : [ %f, %f, %f ] "
+			"}",
+			(unsigned long long) local_ts, dev->device_time_ns,
+			(unsigned long long) dev->last_imu_local_ts,
+			dev->reported_pose.pos.x, dev->reported_pose.pos.y,
+			dev->reported_pose.pos.z,
+
+			dev->reported_pose.orient.x, dev->reported_pose.orient.y,
+			dev->reported_pose.orient.z, dev->reported_pose.orient.w,
+
+			dev->reported_ang_vel.x, dev->reported_ang_vel.y, dev->reported_ang_vel.z,
+
+			dev->reported_lin_vel.x, dev->reported_lin_vel.y, dev->reported_lin_vel.z,
+			dev->reported_lin_accel.x, dev->reported_lin_accel.y, dev->reported_lin_accel.z
+		);
 	}
 
 	if (pose)
