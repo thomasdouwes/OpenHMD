@@ -97,18 +97,20 @@ bool ukf_base_predict_with_process(ukf_base *u, double dt, ukf_process_fn proces
       return false;
   }
 
-  /* Loop over each sigma point state vector and transform
-   * it through the process function */
-  for (int i = 0; i < u->num_sigmas; i++) {
-    matrix2d X_tmp;
+  if (dt != 0.0) {
+    /* Loop over each sigma point state vector and transform
+     * it through the process function */
+    for (int i = 0; i < u->num_sigmas; i++) {
+      matrix2d X_tmp;
 
-    if (matrix2d_column_ref(u->sigmas, i, &X_tmp) != MATRIX_RESULT_OK)
-      return false;
+      if (matrix2d_column_ref(u->sigmas, i, &X_tmp) != MATRIX_RESULT_OK)
+        return false;
 
-    /* FIXME:_only pass a single matrix to the process func and make it
-     * its responsibility to not modify inputs it needs */
-    if (!process_fn(u, dt, &X_tmp, &X_tmp))
-      return false;
+      /* FIXME:_only pass a single matrix to the process func and make it
+       * its responsibility to not modify inputs it needs */
+      if (!process_fn(u, dt, &X_tmp, &X_tmp))
+        return false;
+    }
   }
 
   if (!ut_compute_transform (&u->ut_X, u->sigmas, u->x, u->P, NULL)) {
