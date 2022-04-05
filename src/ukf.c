@@ -128,10 +128,16 @@ bool ukf_base_predict_with_process(ukf_base *u, double dt, ukf_process_fn proces
 bool
 ukf_base_commit(ukf_base *u)
 {
-  if (matrix2d_copy(u->x_prior, u->x) != MATRIX_RESULT_OK)
-    return false;
-  if (matrix2d_copy(u->P_prior, u->P) != MATRIX_RESULT_OK)
-    return false;
+	/* Swap the x<->x_prior and P<->P_prior matrices, to move
+	 * the intermediate result to be the new prior without
+	 * doing a full copy */
+	matrix2d *tmp = u->x_prior;
+	u->x_prior = u->x;
+	u->x = tmp;
+
+	tmp = u->P_prior;
+	u->P_prior = u->P;
+	u->P = tmp;
 
   return true;
 }
