@@ -5,8 +5,6 @@
  */
 
 /* Oculus Rift driver - positional tracking interface */
-#include <libusb.h>
-
 #include "ohmd-video.h"
 #include "ohmd-gstreamer.h"
 
