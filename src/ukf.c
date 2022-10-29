@@ -74,8 +74,29 @@ void ukf_base_clear(ukf_base *u)
   ut_clear(&u->ut_X);
 }
 
+bool ukf_base_zero_predict(ukf_base *u)
+{
+  /* Generate the sigma points around the current state prior without any
+   * forward step */
+  if (!ut_compute_sigma_points(&u->ut_X, u->sigmas, u->x_prior, u->P_prior)) {
+      printf ("Prediction UKF weight computation failed\n");
+      return false;
+  }
+
+  /* Copy the prior to the prediction */
+  if (matrix2d_copy(u->x, u->x_prior) != MATRIX_RESULT_OK)
+    return false;
+  if (matrix2d_copy(u->P, u->P_prior) != MATRIX_RESULT_OK)
+    return false;
+
+  return true;
+}
+
 bool ukf_base_predict(ukf_base *u, double dt)
 {
+  if (dt == 0.0)
+    return ukf_base_zero_predict(u);
+
   return ukf_base_predict_with_process(u, dt, u->process_fn);
 }
 
