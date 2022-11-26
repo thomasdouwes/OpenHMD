@@ -927,7 +927,7 @@ void rift_kalman_6dof_imu_update (rift_kalman_6dof_filter *state, uint64_t time,
 	rift_kalman_6dof_update(state, time, m);
 }
 
-void rift_kalman_6dof_pose_update(rift_kalman_6dof_filter *state, uint64_t time, posef *pose, int delay_slot)
+void rift_kalman_6dof_pose_update(rift_kalman_6dof_filter *state, uint64_t time, posef *pose, vec3f *pos_error, int delay_slot)
 {
 	ukf_measurement *m;
 
@@ -954,10 +954,14 @@ void rift_kalman_6dof_pose_update(rift_kalman_6dof_filter *state, uint64_t time,
 	MATRIX2D_Y(m->z, POSE_MEAS_ORIENTATION+2) = pose->orient.z;
 	MATRIX2D_Y(m->z, POSE_MEAS_ORIENTATION+3) = pose->orient.w;
 
+  /* Update measurement noise using passed position error as 1 stddev */
+	for (int i = 0; i < 3; i++)
+		MATRIX2D_XY(m->R, i, i) = pos_error->arr[i]*pos_error->arr[i];
+
 	rift_kalman_6dof_update(state, time, m);
 }
 
-void rift_kalman_6dof_position_update(rift_kalman_6dof_filter *state, uint64_t time, vec3f *pos, int delay_slot)
+void rift_kalman_6dof_position_update(rift_kalman_6dof_filter *state, uint64_t time, vec3f *pos, vec3f *pos_error, int delay_slot)
 {
 	ukf_measurement *m;
 
@@ -973,6 +977,10 @@ void rift_kalman_6dof_position_update(rift_kalman_6dof_filter *state, uint64_t t
 	MATRIX2D_Y(m->z, POSE_MEAS_POSITION+0) = pos->x;
 	MATRIX2D_Y(m->z, POSE_MEAS_POSITION+1) = pos->y;
 	MATRIX2D_Y(m->z, POSE_MEAS_POSITION+2) = pos->z;
+
+  /* Update measurement noise using passed position error as 1 stddev */
+	for (int i = 0; i < 3; i++)
+		MATRIX2D_XY(m->R, i, i) = pos_error->arr[i]*pos_error->arr[i];
 
 	rift_kalman_6dof_update(state, time, m);
 }

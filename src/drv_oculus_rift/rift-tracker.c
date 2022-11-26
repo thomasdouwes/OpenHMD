@@ -709,7 +709,7 @@ bool rift_tracked_device_get_latest_exposure_info_pose (rift_tracked_device *dev
 }
 
 bool rift_tracked_device_model_pose_update(rift_tracked_device *dev_base, uint64_t local_ts, uint64_t frame_start_local_ts, rift_tracker_exposure_info *exposure_info,
-    rift_pose_metrics *score, posef *model_pose, const char *source)
+    rift_pose_metrics *score, posef *model_pose, vec3f *model_obs_pos_error, const char *source)
 {
 	rift_tracked_device_priv *dev = (rift_tracked_device_priv *) (dev_base);
 	uint64_t frame_device_time_ns = 0;
@@ -718,12 +718,14 @@ bool rift_tracked_device_model_pose_update(rift_tracked_device *dev_base, uint64
 	bool update_position = false;
 	bool update_orientation = false;
 	posef imu_pose;
+	vec3f imu_obs_pos_error; /* Model observation position error transformed to IMU */
 
 	ohmd_lock_mutex (dev->device_lock);
 
 	/* Apply the fusion->model pose on top of the passed model->global pose,
 	 * to get the global IMU pose */
 	oposef_apply(&dev->fusion_from_model, model_pose, &imu_pose);
+	oquatf_get_rotated (&dev->fusion_from_model.orient, model_obs_pos_error, &imu_obs_pos_error);
 
 	rift_tracked_device_send_imu_debug(dev);
 
@@ -786,9 +788,9 @@ bool rift_tracked_device_model_pose_update(rift_tracked_device *dev_base, uint64
 
 			if (update_position) {
 				if (update_orientation) {
-					rift_kalman_6dof_pose_update(&dev->ukf_fusion, dev->device_time_ns, &imu_pose, slot->slot_id);
+					rift_kalman_6dof_pose_update(&dev->ukf_fusion, dev->device_time_ns, &imu_pose, &imu_obs_pos_error, slot->slot_id);
 				} else {
-					rift_kalman_6dof_position_update(&dev->ukf_fusion, dev->device_time_ns, &imu_pose.pos, slot->slot_id);
+					rift_kalman_6dof_position_update(&dev->ukf_fusion, dev->device_time_ns, &imu_pose.pos, &imu_obs_pos_error, slot->slot_id);
 				}
 
 				dev->last_observed_pose_ts = dev->device_time_ns;

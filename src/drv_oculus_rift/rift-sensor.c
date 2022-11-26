@@ -617,8 +617,17 @@ static bool handle_found_pose (rift_sensor_ctx *sensor_ctx,
 		dev->id, obj_world_pose->orient.x, obj_world_pose->orient.y, obj_world_pose->orient.z, obj_world_pose->orient.w,
 		obj_world_pose->pos.x, obj_world_pose->pos.y, obj_world_pose->pos.z);
 
+	/* Compute an error of 1cm at right angles to the camera, and 3cm in Z.
+	 * FIXME: Compute based on pixel error and distance from camera and pass
+	 * it in */
+	vec3f cam_obs_pos_error = {{ 0.01, 0.01, 0.03 }};
+	vec3f world_obs_pos_error;
+
+	quatf *cam_orient = &sensor_ctx->pf.camera_pose.orient;
+	oquatf_get_rotated(cam_orient, &cam_obs_pos_error, &world_obs_pos_error);
+
 	bool ret = rift_tracked_device_model_pose_update(dev, now, frame->vframe->start_ts, &frame->exposure_info,
-	       score, obj_world_pose, sensor_ctx->serial_no);
+	       score, obj_world_pose, &world_obs_pos_error, sensor_ctx->serial_no);
 
 	if (ret) {
 		/* If this pose was accepted by the tracker, transfer these blob labels to the blobwatch object */
