@@ -24,7 +24,7 @@ struct ohmd_video_frame {
 	ohmd_video_frame_format format;
 
 	/* Source specific PTS from the camera data */
-	uint32_t pts;
+	uint64_t pts;
 	/* Posix monotonic time of frame start */
 	uint64_t start_ts;
 
