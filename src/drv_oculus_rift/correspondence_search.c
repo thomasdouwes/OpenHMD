@@ -250,17 +250,19 @@ static bool
 correspondence_search_project_pose (correspondence_search_t *cs, led_search_model_t *model,
 	posef *pose, cs_model_info_t *mi, int depth)
 {
-  /* Given a pose, project each 3D LED point back to 2D and assign correspondences to blobs */
-  /* If enough match, print out the pose */
+	/* Given a pose, project each 3D LED point back to 2D and assign correspondences to blobs */
+	/* If enough match, print out the pose */
 	rift_leds *leds = model->leds;
 
-  /* Increment stats */
-  cs->num_pose_checks++;
+	/* Increment stats */
+	cs->num_pose_checks++;
 
-  if (pose->pos.z < 0.05 || pose->pos.z > 15) { /* Invalid position, out of range */
+	if (pose->pos.z < 0.05 || pose->pos.z > 15) { /* Invalid position, out of range */
 		LOG("Pose out of range - Z @ %f metres\n", pose->pos.z);
-    return false;
-  }
+		return false;
+	}
+
+	rift_pose_metrics score;
 
 	/* See if we need to make a gravity vector alignment check */
 	if (mi->search_flags & CS_FLAG_MATCH_GRAVITY) {
@@ -270,15 +272,39 @@ correspondence_search_project_pose (correspondence_search_t *cs, led_search_mode
 
 		float pose_angle = acosf(oquatf_get_dot(&pose_gravity_swing, &mi->gravity_swing));
 		if (pose_angle > mi->gravity_tolerance_rad) {
+#if DUMP_FULL_DEBUG
+			if (mi->search_flags & CS_FLAG_HAVE_POSE_PRIOR) {
+				rift_evaluate_pose_with_prior (&score, pose,
+				    false, &mi->pose_prior, mi->pos_error_thresh, mi->rot_error_thresh,
+				    cs->blobs, cs->num_points,
+				    mi->id, leds, cs->calib, NULL);
+			}
+			else {
+				rift_evaluate_pose (&score, pose, cs->blobs, cs->num_points,
+				    mi->id, leds, cs->calib, NULL);
+			}
+
 			DEBUG("model %d failed pose match - orientation was not within tolerance (error %f deg > %f deg)\n"
-			    "gravity vec %f %f %f pose %f %f %f %f swing %f %f %f %f prior swing %f %f %f %f\n",
+			    "gravity vec %f %f %f pose %f %f %f %f swing %f %f %f %f prior swing %f %f %f %f. Matched %d blobs of %d visible LEDs with %f error\n",
+			    mi->id, RAD_TO_DEG(pose_angle), RAD_TO_DEG(mi->gravity_tolerance_rad),
+			    mi->gravity_vector.x, mi->gravity_vector.y, mi->gravity_vector.z,
+			    pose->orient.x, pose->orient.y, pose->orient.z, pose->orient.w,
+			    pose_gravity_swing.x, pose_gravity_swing.y, pose_gravity_swing.z, pose_gravity_swing.w,
+			    mi->gravity_swing.x, mi->gravity_swing.y, mi->gravity_swing.z, mi->gravity_swing.w,
+			    score.matched_blobs, score.visible_leds, score.reprojection_error
+			    );
+#endif
+			return false;
+		}
+		else {
+			DEBUG("model %d good candidate pose match - orientation was within tolerance (error %f deg <= %f deg)\n"
+			    "gravity vec %f %f %f pose %f %f %f %f swing %f %f %f %f prior swing %f %f %f %f.\n",
 			    mi->id, RAD_TO_DEG(pose_angle), RAD_TO_DEG(mi->gravity_tolerance_rad),
 			    mi->gravity_vector.x, mi->gravity_vector.y, mi->gravity_vector.z,
 			    pose->orient.x, pose->orient.y, pose->orient.z, pose->orient.w,
 			    pose_gravity_swing.x, pose_gravity_swing.y, pose_gravity_swing.z, pose_gravity_swing.w,
 			    mi->gravity_swing.x, mi->gravity_swing.y, mi->gravity_swing.z, mi->gravity_swing.w
-			    );
-			return false;
+			);
 		}
 	}
 
@@ -297,61 +323,61 @@ correspondence_search_project_pose (correspondence_search_t *cs, led_search_mode
 		    mi->id, leds, cs->calib, NULL);
 	}
 
-  /* If this pose is any good, test it further */
-  if (POSE_HAS_FLAGS(&score, RIFT_POSE_MATCH_GOOD)) {
-    if (rift_score_is_better_pose (&mi->best_score, &score)) {
-        mi->best_score = score;
-        mi->best_pose = *pose;
+	/* If this pose is any good, test it further */
+	if (POSE_HAS_FLAGS(&score, RIFT_POSE_MATCH_GOOD)) {
+		if (rift_score_is_better_pose (&mi->best_score, &score)) {
+			mi->best_score = score;
+			mi->best_pose = *pose;
 #if DUMP_TIMING
-        mi->best_pose_found_time = get_cur_time();
+			mi->best_pose_found_time = get_cur_time();
 #endif
-        mi->best_pose_blob_depth = depth;
-        mi->best_pose_led_depth = mi->led_depth;
-        mi->match_flags = mi->best_score.match_flags;
+			mi->best_pose_blob_depth = depth;
+			mi->best_pose_led_depth = mi->led_depth;
+			mi->match_flags = mi->best_score.match_flags;
 
-        if (mi->match_flags & RIFT_POSE_MATCH_STRONG) {
-          DEBUG_TIMING("# Found a strong match for model %d - %d points out of %d with error %f pixels^2 after %u trials and %u pose checks\n", mi->id, mi->best_score.matched_blobs,
-                    mi->best_score.visible_leds, mi->best_score.reprojection_error, cs->num_trials, cs->num_pose_checks);
-          DEBUG_TIMING("# Found at LED depth %d blob depth %d after %f ms. Anchor indices: LED %d blob %d\n",
-                    mi->best_pose_led_depth, mi->best_pose_blob_depth, (mi->best_pose_found_time - mi->search_start_time) * 1000.0,
-                    mi->led_index, mi->blob_index);
-          DEBUG_TIMING("# pose orient %f %f %f %f pos %f %f %f\n",
-                    mi->best_pose.orient.x, mi->best_pose.orient.y, mi->best_pose.orient.z, mi->best_pose.orient.w,
-                    mi->best_pose.pos.x, mi->best_pose.pos.y, mi->best_pose.pos.z);
-        }
+			if (mi->match_flags & RIFT_POSE_MATCH_STRONG) {
+				DEBUG_TIMING("# Found a strong match for model %d - %d points out of %d with error %f pixels^2 after %u trials and %u pose checks\n", mi->id, mi->best_score.matched_blobs,
+				          mi->best_score.visible_leds, mi->best_score.reprojection_error, cs->num_trials, cs->num_pose_checks);
+				DEBUG_TIMING("# Found at LED depth %d blob depth %d after %f ms. Anchor indices: LED %d blob %d\n",
+				          mi->best_pose_led_depth, mi->best_pose_blob_depth, (mi->best_pose_found_time - mi->search_start_time) * 1000.0,
+				          mi->led_index, mi->blob_index);
+				DEBUG_TIMING("# pose orient %f %f %f %f pos %f %f %f\n",
+				          mi->best_pose.orient.x, mi->best_pose.orient.y, mi->best_pose.orient.z, mi->best_pose.orient.w,
+				          mi->best_pose.pos.x, mi->best_pose.pos.y, mi->best_pose.pos.z);
+			}
 
 #if DUMP_FULL_DEBUG
-        float error_per_led = score.visible_leds > 0 ? score.reprojection_error / score.visible_leds : -1;
-        DEBUG("model %d new best pose candidate orient %f %f %f %f pos %f %f %f has %u visible LEDs, error %f (%f / LED) after %u trials and %u pose checks\n",
-               mi->id, pose->orient.x, pose->orient.y, pose->orient.z, pose->orient.w,
-                    pose->pos.x, pose->pos.y, pose->pos.z, score.visible_leds, score.reprojection_error, error_per_led,
-                    cs->num_trials, cs->num_pose_checks);
+			float error_per_led = score.visible_leds > 0 ? score.reprojection_error / score.visible_leds : -1;
+			DEBUG("model %d new best pose candidate orient %f %f %f %f pos %f %f %f has %u visible LEDs, error %f (%f / LED) after %u trials and %u pose checks\n",
+			    mi->id, pose->orient.x, pose->orient.y, pose->orient.z, pose->orient.w,
+			    pose->pos.x, pose->pos.y, pose->pos.z, score.visible_leds, score.reprojection_error, error_per_led,
+			    cs->num_trials, cs->num_pose_checks);
 
-        DEBUG("model %d matched %u blobs of %u\n", mi->id, score.matched_blobs, score.visible_leds);
+			DEBUG("model %d matched %u blobs of %u\n", mi->id, score.matched_blobs, score.visible_leds);
 #endif
 #if DUMP_SCENE
-        dump_pose (cs, model, pose, mi);
+			dump_pose (cs, model, pose, mi);
 #endif
-        return true;
-    } else {
+			return true;
+		} else {
 #if DUMP_FULL_DEBUG
-      float error_per_led = score.visible_leds > 0 ? score.reprojection_error / score.visible_leds : -1;
-      DEBUG("pose candidate orient %f %f %f %f pos %f %f %f has %u visible LEDs, error %f (%f / LED)\n",
-              pose->orient.x, pose->orient.y, pose->orient.z, pose->orient.w,
-              pose->pos.x, pose->pos.y, pose->pos.z, score.visible_leds, score.reprojection_error,
-              error_per_led);
-      DEBUG("matched %u blobs of %u\n", score.matched_blobs, score.visible_leds);
+			float error_per_led = score.visible_leds > 0 ? score.reprojection_error / score.visible_leds : -1;
+			DEBUG("pose candidate orient %f %f %f %f pos %f %f %f has %u visible LEDs, error %f (%f / LED)\n",
+			    pose->orient.x, pose->orient.y, pose->orient.z, pose->orient.w,
+			    pose->pos.x, pose->pos.y, pose->pos.z, score.visible_leds, score.reprojection_error,
+			    error_per_led);
+			DEBUG("matched %u blobs of %u\n", score.matched_blobs, score.visible_leds);
 #endif
-    }
-    LOG("Found good pose match for device %u - %u LEDs matched %u visible ones\n",
-        mi->id, score.matched_blobs, score.visible_leds);
-    return true;
-  }
+		}
+		LOG("Found good pose match for device %u - %u LEDs matched %u visible ones\n",
+		    mi->id, score.matched_blobs, score.visible_leds);
+		return true;
+	}
 
-  LOG("Failed pose match - only %u blobs matched %u visible LEDs. %u unmatched blobs. Error %f\n",
-      score.matched_blobs, score.visible_leds, score.unmatched_blobs, score.reprojection_error);
+	LOG("Failed pose match - only %u blobs matched %u visible LEDs. %u unmatched blobs. Error %f\n",
+	    score.matched_blobs, score.visible_leds, score.unmatched_blobs, score.reprojection_error);
 
-  return false;
+	return false;
 }
 
 static void
@@ -738,12 +764,14 @@ search_pose_for_model (correspondence_search_t *cs, cs_model_info_t *mi)
       anchor->num_neighbours = out_index;
 
 #if DUMP_FULL_LOG
-      printf ("Model %d, blob %d @ %f,%f neighbours %d Search list:\n", mi->id, b, anchor->blob->x, anchor->blob->y, anchor->num_neighbours);
+      printf ("Model %d, blob %d (LED ID %d) @ %f,%f neighbours %d Search list:\n",
+          mi->id, b, anchor->blob->led_id, anchor->blob->x, anchor->blob->y, anchor->num_neighbours);
       for (int i = 0; i < anchor->num_neighbours; i++) {
           cs_image_point_t *p1 = anchor->neighbours[i];
           double dist = (p1->blob->y - anchor->blob->y) * (p1->blob->y - anchor->blob->y) +
                         (p1->blob->x - anchor->blob->x) * (p1->blob->x - anchor->blob->x);
-          printf ("  LED ID %u (%f,%f) @ %f,%f. Dist %f\n", p1->blob->led_id, p1->point_homog[0], p1->point_homog[1],
+          printf ("  blob %d LED ID %d (%f,%f) @ %f,%f. Dist %f\n", (int) (p1->blob - cs->blobs),
+              p1->blob->led_id, p1->point_homog[0], p1->point_homog[1],
               p1->blob->x, p1->blob->y, sqrt(dist));
       }
 #endif
