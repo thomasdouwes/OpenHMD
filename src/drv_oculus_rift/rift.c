@@ -342,7 +342,7 @@ static void handle_touch_controller_message(rift_hmd_t *hmd, uint64_t local_ts,
 		oposef_init(&imu_pose, &touch->calibration.imu_position, &imu_orient);
 
 		quatf model_orient = {{ 0.0, 0.0, 0.0, 1.0 }};
-		vec3f model_pos = {{ 0.0, 0.0, 0.0 }};
+		vec3f model_pos = {{ 0.0, -0.01, -0.045 }};
 		posef model_pose;
 		oposef_init(&model_pose, &model_pos, &model_orient);
 
