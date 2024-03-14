@@ -19,7 +19,7 @@
  * 1 = constant velocity
  * 2 = hybrid constant acccel / constant velocity
  */
-#define MOTION_MODEL 2
+#define MOTION_MODEL 0
 
 /* threshold for hybrid motion model switching */
 #define HYBRID_MOTION_THRESHOLD (3 / 1000.0)
@@ -31,7 +31,7 @@
 #define IMU_ACCEL_BIAS_NOISE_INITIAL 0.25 /* accelerometer bias (m/s^2)^2 */
 
 /* Acceleration and Velocity damping factor (1.0 = undamped) */
-#define ACCEL_DAMP 0.9
+#define ACCEL_DAMP 0.7
 #define VEL_DAMP 0.999
 
 #define GRAVITY_MAG 9.80665
